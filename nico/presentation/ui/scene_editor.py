@@ -34,13 +34,37 @@ class SceneEditor(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(10)
         
+        # Welcome message (shown when no scene is loaded)
+        self.welcome_widget = QWidget()
+        welcome_layout = QVBoxLayout(self.welcome_widget)
+        welcome_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        welcome_label = QLabel(
+            "<h2>Welcome to nico</h2>"
+            "<p style='color: #666;'>Create a new project or open an existing one to get started.</p>"
+            "<p style='color: #666; margin-top: 20px;'>"
+            "<b>File → New Project</b> to create a new writing project<br>"
+            "<b>File → Open Project</b> to open an existing project<br>"
+            "<b>File → Open Recent</b> to quickly reopen recent work"
+            "</p>"
+        )
+        welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        welcome_label.setWordWrap(True)
+        welcome_layout.addWidget(welcome_label)
+        
+        # Editor container
+        self.editor_widget = QWidget()
+        editor_layout = QVBoxLayout(self.editor_widget)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.setSpacing(10)
+        
         # Title label
         self.title_label = QLabel("No scene selected")
         title_font = QFont()
         title_font.setPointSize(14)
         title_font.setBold(True)
         self.title_label.setFont(title_font)
-        layout.addWidget(self.title_label)
+        editor_layout.addWidget(self.title_label)
         
         # Text editor
         self.text_edit = QTextEdit()
@@ -61,13 +85,30 @@ class SceneEditor(QWidget):
         # Connect text changes
         self.text_edit.textChanged.connect(self._on_text_changed)
         
-        layout.addWidget(self.text_edit)
+        editor_layout.addWidget(self.text_edit)
         
         # Status label for autosave
         self.status_label = QLabel("")
         self.status_label.setStyleSheet("color: #666; font-size: 10pt;")
-        layout.addWidget(self.status_label)
+        editor_layout.addWidget(self.status_label)
+        
+        # Add both widgets to main layout
+        layout.addWidget(self.welcome_widget)
+        layout.addWidget(self.editor_widget)
+        
+        # Show welcome by default
+        self._show_welcome()
 
+    def _show_welcome(self) -> None:
+        """Show welcome screen and hide editor."""
+        self.welcome_widget.show()
+        self.editor_widget.hide()
+    
+    def _show_editor(self) -> None:
+        """Show editor and hide welcome screen."""
+        self.welcome_widget.hide()
+        self.editor_widget.show()
+    
     def _init_autosave(self) -> None:
         """Initialize autosave timer."""
         self._autosave_timer = QTimer(self)
@@ -79,6 +120,9 @@ class SceneEditor(QWidget):
         self.current_scene_id = scene_id
         self.current_scene_title = title
         self._content_modified = False
+        
+        # Show editor instead of welcome
+        self._show_editor()
         
         # Update title
         self.title_label.setText(title)
@@ -194,6 +238,9 @@ class SceneEditor(QWidget):
         self.text_edit.clear()
         self.text_edit.blockSignals(False)
         self.status_label.setText("")
+        
+        # Show welcome screen
+        self._show_welcome()
 
     def save_now(self) -> None:
         """Force immediate save."""

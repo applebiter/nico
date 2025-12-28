@@ -99,6 +99,10 @@ class MainWindow(QMainWindow):
 
         # Set as central widget
         self.setCentralWidget(main_splitter)
+        
+        # Status bar
+        self.status_bar = self.statusBar()
+        self.status_bar.showMessage("No project open")
 
     def _create_menus(self) -> None:
         """Create application menus."""
@@ -248,6 +252,7 @@ class MainWindow(QMainWindow):
             self.scene_editor.clear()
             self.inspector_panel.clear()
             self.setWindowTitle("nico")
+            self.status_bar.showMessage("No project open")
 
     def _load_project(self) -> None:
         """Load project data into the UI."""
@@ -256,6 +261,9 @@ class MainWindow(QMainWindow):
         
         # Update window title
         self.setWindowTitle(f"{self.current_project.name} - nico")
+        
+        # Update status bar
+        self.status_bar.showMessage(f"Project: {self.current_project.name}")
         
         # Clear binder and set project
         self.binder_tree.set_project(self.current_project.name)
@@ -369,6 +377,11 @@ class MainWindow(QMainWindow):
                     scene.title,
                     content
                 )
+                
+                # Update status bar with scene info
+                if document:
+                    word_count = len(document.rendered_text.split()) if document.rendered_text else 0
+                    self.status_bar.showMessage(f"Scene: {scene.title} | {word_count} words")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load scene:\n{str(e)}")
 
