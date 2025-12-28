@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nico"
+version = "0.1.0"
+description = "Narrative Insight Composition Output - A local-first writing application"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "nico development team"}
+]
+dependencies = [
+    "PySide6>=6.6.0",
+    "SQLAlchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "httpx>=0.25.0",
+    "chromadb>=0.4.0",
+    "python-docx>=1.1.0",
+    "python-markdown>=3.5.0",
+    "bibtexparser>=1.4.0",
+    "keyring>=24.0.0",
+    "pydantic>=2.5.0",
+    "python-dateutil>=2.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.12.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+
+[project.scripts]
+nico = "nico.__main__:main"
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
