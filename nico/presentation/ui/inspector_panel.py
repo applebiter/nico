@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QScrollArea,
+    QSizePolicy,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -49,12 +50,21 @@ class InspectorPanel(QWidget):
         self.content_widget = QWidget()
         self.content_layout = QVBoxLayout(self.content_widget)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
-        self.content_layout.setSpacing(15)
+        self.content_layout.setSpacing(10)
+        self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        # Set size policy to not expand vertically
+        self.content_widget.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Maximum
+        )
         
         # Form layout for fields
         self.form_layout = QFormLayout()
         self.form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        self.form_layout.setVerticalSpacing(8)
+        self.form_layout.setContentsMargins(0, 0, 0, 0)
         
         # Type field
         self.type_label = QLabel("-")
@@ -84,10 +94,9 @@ class InspectorPanel(QWidget):
         self.form_layout.addRow("Status:", self.status_label)
         
         self.content_layout.addLayout(self.form_layout)
-        self.content_layout.addStretch()
         
         scroll.setWidget(self.content_widget)
-        main_layout.addWidget(scroll)
+        main_layout.addWidget(scroll, 1)
         
         # Initially hide editable fields
         self._show_empty_state()

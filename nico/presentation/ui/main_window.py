@@ -1,5 +1,6 @@
 """Main application window."""
 
+import json
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
@@ -71,7 +72,6 @@ class MainWindow(QMainWindow):
         
         self.binder_tree = BinderTreeWidget()
         self.binder_tree.item_selected.connect(self._on_binder_item_selected)
-        self.binder_tree.item_double_clicked.connect(self._on_binder_item_double_clicked)
         self.binder_tree.add_story_requested.connect(self._on_add_story)
         self.binder_tree.add_chapter_requested.connect(self._on_add_chapter)
         self.binder_tree.add_scene_requested.connect(self._on_add_scene)
@@ -304,12 +304,16 @@ class MainWindow(QMainWindow):
                     )
             elif item_type == "scene":
                 scene_repo = SceneRepository(session)
+                scene_doc_repo = SceneDocumentRepository(session)
                 scene = scene_repo.get_by_id(item_id)
                 if scene:
+                    # Load document separately
+                    document = scene_doc_repo.get_by_scene_id(scene.id)
+                    
                     # Calculate word count from document
                     word_count = 0
-                    if scene.document and scene.document.content:
-                        word_count = self._calculate_word_count(scene.document.content)
+                    if document and document.content:
+                        word_count = self._calculate_word_count(json.dumps(document.content))
                     
                     self.inspector_panel.load_item(
                         "scene",
@@ -319,13 +323,11 @@ class MainWindow(QMainWindow):
                         word_count,
                         scene.status
                     )
+                    
+                    # Load scene into editor
+                    self._load_scene(item_id)
         except Exception as e:
             print(f"Error loading metadata: {e}")
-
-    def _on_binder_item_double_clicked(self, item_type: str, item_id: UUID) -> None:
-        """Handle binder item double-click."""
-        if item_type == "scene":
-            self._load_scene(item_id)
 
     def _load_scene(self, scene_id: UUID) -> None:
         """Load a scene into the editor."""
@@ -335,15 +337,20 @@ class MainWindow(QMainWindow):
         try:
             session = next(self.database.get_session())
             scene_repo = SceneRepository(session)
+            scene_doc_repo = SceneDocumentRepository(session)
             
             get_scene = GetSceneUseCase(scene_repo)
             scene = get_scene.execute(scene_id)
             
-            if scene and scene.document:
+            if scene:
+                # Load document separately
+                document = scene_doc_repo.get_by_scene_id(scene_id)
+                content = json.dumps(document.content) if document else json.dumps({"type": "doc", "content": []})
+                
                 self.scene_editor.load_scene(
                     scene.id,
                     scene.title,
-                    scene.document.content
+                    content
                 )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load scene:\n{str(e)}")

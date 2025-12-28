@@ -51,6 +51,13 @@ class SceneEditor(QWidget):
         editor_font.setPointSize(12)
         self.text_edit.setFont(editor_font)
         
+        # Add padding around text
+        self.text_edit.setStyleSheet("""
+            QTextEdit {
+                padding: 20px;
+            }
+        """)
+        
         # Connect text changes
         self.text_edit.textChanged.connect(self._on_text_changed)
         
@@ -78,7 +85,12 @@ class SceneEditor(QWidget):
         
         # Parse content from ProseMirror JSON
         try:
-            content_data = json.loads(content_json)
+            # Handle both JSON string and dict
+            if isinstance(content_json, str):
+                content_data = json.loads(content_json) if content_json else {"type": "doc", "content": []}
+            else:
+                content_data = content_json
+            
             # Extract text content from ProseMirror structure
             text = self._extract_text_from_prosemirror(content_data)
             
