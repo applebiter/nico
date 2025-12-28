@@ -22,21 +22,25 @@ from nico.application.use_cases import (
     CreateProjectUseCase,
     CreateSceneUseCase,
     CreateStoryUseCase,
+    GetSceneUseCase,
     ListChaptersUseCase,
     ListScenesUseCase,
     ListStoriesUseCase,
     OpenProjectUseCase,
+    UpdateSceneDocumentUseCase,
 )
 from nico.domain.models import Project
 from nico.infrastructure.persistence import (
     ChapterRepository,
     Database,
     ProjectRepository,
+    SceneDocumentRepository,
     SceneRepository,
     StoryRepository,
 )
 from nico.presentation.ui.binder_tree import BinderTreeWidget
 from nico.presentation.ui.new_project_dialog import NewProjectDialog
+from nico.presentation.ui.scene_editor import SceneEditor
 
 
 class MainWindow(QMainWindow):
@@ -64,6 +68,7 @@ class MainWindow(QMainWindow):
         
         self.binder_tree = BinderTreeWidget()
         self.binder_tree.item_selected.connect(self._on_binder_item_selected)
+        self.binder_tree.item_double_clicked.connect(self._on_binder_item_double_clicked)
         self.binder_tree.add_story_requested.connect(self._on_add_story)
         self.binder_tree.add_chapter_requested.connect(self._on_add_chapter)
         self.binder_tree.add_scene_requested.connect(self._on_add_scene)
@@ -71,14 +76,8 @@ class MainWindow(QMainWindow):
         binder_layout.addWidget(self.binder_tree)
 
         # Editor (center panel)
-        self.editor_widget = QWidget()
-        editor_layout = QVBoxLayout(self.editor_widget)
-        editor_layout.setContentsMargins(10, 10, 10, 10)
-        
-        self.editor_placeholder = QLabel("No project open\n\nFile → New Project to get started")
-        self.editor_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.editor_placeholder.setStyleSheet("color: #666; font-size: 14pt;")
-        editor_layout.addWidget(self.editor_placeholder)
+        self.scene_editor = SceneEditor()
+        self.scene_editor.content_changed.connect(self._on_scene_content_changed)
 
         # Inspector (right panel)
         self.inspector_widget = QWidget()
@@ -90,7 +89,7 @@ class MainWindow(QMainWindow):
 
         # Add panels to splitter
         main_splitter.addWidget(self.binder_widget)
-        main_splitter.addWidget(self.editor_widget)
+        main_splitter.addWidget(self.scene_editor)
         main_splitter.addWidget(self.inspector_widget)
 
         # Set initial sizes: binder 20%, editor 50%, inspector 30%
@@ -223,11 +222,14 @@ class MainWindow(QMainWindow):
     def _on_close_project(self) -> None:
         """Handle closing the current project."""
         if self.current_project:
+            # Save any unsaved changes
+            self.scene_editor.save_now()
+            
             self.current_project = None
             self.database = None
             self.binder_tree.clear_project()
+            self.scene_editor.clear()
             self.setWindowTitle("nico")
-            self.editor_placeholder.setText("No project open\n\nFile → New Project to get started")
 
     def _load_project(self) -> None:
         """Load project data into the UI."""
@@ -250,39 +252,77 @@ class MainWindow(QMainWindow):
             list_stories = ListStoriesUseCase(story_repo)
             stories = list_stories.execute(self.current_project.id)
             
-            if not stories:
-                # No stories yet - show helpful message
-                self.editor_placeholder.setText(
-                    f"Project: {self.current_project.name}\n\n"
-                    "Right-click in the binder to create your first story"
-                )
-            else:
-                # Add stories to binder
-                for story in stories:
-                    story_item = self.binder_tree.add_story(story.id, story.title)
-                    
-                    # Load chapters for this story
-                    list_chapters = ListChaptersUseCase(chapter_repo)
-                    chapters = list_chapters.execute(story.id)
-                    for chapter in chapters:
-                        chapter_item = self.binder_tree.add_chapter(story_item, chapter.id, chapter.title)
-                        
-                        # Load scenes for this chapter
-                        list_scenes = ListScenesUseCase(scene_repo)
-                        scenes = list_scenes.execute(chapter.id)
-                        for scene in scenes:
-                            self.binder_tree.add_scene(chapter_item, scene.id, scene.title)
+            # Add stories to binder
+            for story in stories:
+                story_item = self.binder_tree.add_story(story.id, story.title)
                 
-                self.editor_placeholder.setText(
-                    "Select an item from the binder to view/edit"
-                )
+                # Load chapters for this story
+                list_chapters = ListChaptersUseCase(chapter_repo)
+                chapters = list_chapters.execute(story.id)
+                for chapter in chapters:
+                    chapter_item = self.binder_tree.add_chapter(story_item, chapter.id, chapter.title)
+                    
+                    # Load scenes for this chapter
+                    list_scenes = ListScenesUseCase(scene_repo)
+                    scenes = list_scenes.execute(chapter.id)
+                    for scene in scenes:
+                        self.binder_tree.add_scene(chapter_item, scene.id, scene.title)
+            
+            # Clear editor
+            self.scene_editor.clear()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load project:\n{str(e)}")
 
     def _on_binder_item_selected(self, item_type: str, item_id: UUID) -> None:
         """Handle binder item selection."""
-        # TODO: Load and display the selected item
-        self.editor_placeholder.setText(f"Selected {item_type}: {item_id}")
+        # Update inspector with metadata (TODO: implement inspector)
+        pass
+
+    def _on_binder_item_double_clicked(self, item_type: str, item_id: UUID) -> None:
+        """Handle binder item double-click."""
+        if item_type == "scene":
+            self._load_scene(item_id)
+
+    def _load_scene(self, scene_id: UUID) -> None:
+        """Load a scene into the editor."""
+        if not self.database:
+            return
+        
+        try:
+            session = next(self.database.get_session())
+            scene_repo = SceneRepository(session)
+            
+            get_scene = GetSceneUseCase(scene_repo)
+            scene = get_scene.execute(scene_id)
+            
+            if scene and scene.document:
+                self.scene_editor.load_scene(
+                    scene.id,
+                    scene.title,
+                    scene.document.content
+                )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load scene:\n{str(e)}")
+
+    def _on_scene_content_changed(self, scene_id: UUID, content_json: str) -> None:
+        """Handle scene content changes (autosave)."""
+        if not self.database:
+            return
+        
+        try:
+            session = next(self.database.get_session())
+            scene_repo = SceneRepository(session)
+            scene_doc_repo = SceneDocumentRepository(session)
+            
+            update_doc = UpdateSceneDocumentUseCase(scene_repo, scene_doc_repo)
+            update_doc.execute(
+                scene_id=scene_id,
+                content=content_json,
+                create_revision=False  # Only create revisions on manual save
+            )
+        except Exception as e:
+            # Log error but don't interrupt user's workflow
+            print(f"Autosave error: {e}")
 
     def _on_add_story(self) -> None:
         """Handle adding a new story."""

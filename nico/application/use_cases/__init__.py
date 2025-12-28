@@ -18,6 +18,7 @@ from .scene import (
     DeleteSceneUseCase,
     GetSceneDocumentUseCase,
     GetSceneRevisionsUseCase,
+    GetSceneUseCase,
     ListScenesUseCase,
     ReorderSceneUseCase,
     UpdateSceneDocumentUseCase,
@@ -51,6 +52,7 @@ __all__ = [
     "DeleteChapterUseCase",
     # Scene use cases
     "CreateSceneUseCase",
+    "GetSceneUseCase",
     "ListScenesUseCase",
     "UpdateSceneUseCase",
     "UpdateSceneDocumentUseCase",

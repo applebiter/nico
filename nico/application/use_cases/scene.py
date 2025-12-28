@@ -93,6 +93,25 @@ class ListScenesUseCase:
         return self.scene_repo.get_by_chapter(chapter_id)
 
 
+class GetSceneUseCase:
+    """Get a single scene by ID."""
+
+    def __init__(self, scene_repo: ISceneRepository):
+        self.scene_repo = scene_repo
+
+    def execute(self, scene_id: UUID) -> Optional[Scene]:
+        """
+        Get a scene by ID.
+        
+        Args:
+            scene_id: Scene ID
+            
+        Returns:
+            Scene entity or None if not found
+        """
+        return self.scene_repo.get_by_id(scene_id)
+
+
 class UpdateSceneUseCase:
     """Update scene metadata."""
 
