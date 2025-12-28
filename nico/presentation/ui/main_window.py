@@ -22,6 +22,9 @@ from nico.application.use_cases import (
     CreateProjectUseCase,
     CreateSceneUseCase,
     CreateStoryUseCase,
+    DeleteChapterUseCase,
+    DeleteSceneUseCase,
+    DeleteStoryUseCase,
     GetSceneUseCase,
     ListChaptersUseCase,
     ListScenesUseCase,
@@ -146,7 +149,16 @@ class MainWindow(QMainWindow):
 
         # Project menu
         project_menu = menubar.addMenu("&Project")
-        # TODO: Add project actions
+        
+        add_story_action = project_menu.addAction("New &Story...")
+        add_story_action.setShortcut("Ctrl+Shift+S")
+        add_story_action.triggered.connect(self._on_add_story)
+        
+        project_menu.addSeparator()
+        
+        save_action = project_menu.addAction("&Save All")
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self._on_save_all)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -561,16 +573,60 @@ class MainWindow(QMainWindow):
 
     def _on_delete_item(self, item_type: str, item_id: UUID) -> None:
         """Handle deleting an item."""
-        # TODO: Implement delete functionality with use cases
+        if not self.database:
+            return
+        
+        # Confirm deletion
+        item_name = item_type.capitalize()
         reply = QMessageBox.question(
             self,
-            "Confirm Delete",
-            f"Are you sure you want to delete this {item_type}?",
+            f"Delete {item_name}",
+            f"Are you sure you want to delete this {item_type}?\n\n"
+            f"This action cannot be undone.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
         )
         
-        if reply == QMessageBox.StandardButton.Yes:
-            QMessageBox.information(self, "Delete", f"Delete {item_type} functionality coming soon!")
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        try:
+            session = next(self.database.get_session())
+            
+            if item_type == "story":
+                story_repo = StoryRepository(session)
+                delete_story = DeleteStoryUseCase(story_repo)
+                delete_story.execute(item_id)
+            elif item_type == "chapter":
+                chapter_repo = ChapterRepository(session)
+                delete_chapter = DeleteChapterUseCase(chapter_repo)
+                delete_chapter.execute(item_id)
+            elif item_type == "scene":
+                scene_repo = SceneRepository(session)
+                delete_scene = DeleteSceneUseCase(scene_repo)
+                delete_scene.execute(item_id)
+            
+            # Remove from tree
+            item = self._find_tree_item(item_type, item_id)
+            if item:
+                parent = item.parent()
+                if parent:
+                    parent.removeChild(item)
+                else:
+                    index = self.binder_tree.indexOfTopLevelItem(item)
+                    if index >= 0:
+                        self.binder_tree.takeTopLevelItem(index)
+            
+            # Clear editor and inspector if this item was selected
+            if self.scene_editor.current_scene_id == item_id:
+                self.scene_editor.clear()
+            if self.inspector_panel.current_item_id == item_id:
+                self.inspector_panel.clear()
+            
+            self.status_bar.showMessage(f"{item_name} deleted")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to delete {item_type}:\n{str(e)}")
 
     def _find_tree_item(self, item_type: str, item_id: UUID):
         """Find a tree item by type and ID."""
@@ -585,7 +641,8 @@ class MainWindow(QMainWindow):
             iterator += 1
         return None
 
-    def _get_recent_projects(self) -> List[str]:
+    def _on_save_all(self) -> None:
+        \"\"\"Save all changes (force autosave).\"\"\"\n        if self.scene_editor.current_scene_id:\n            self.scene_editor.save_now()\n            self.status_bar.showMessage(\"All changes saved\", 3000)\n\n    def _get_recent_projects(self) -> List[str]:
         """Get list of recent project paths."""
         recent = self.settings.value("recent_projects", [])
         if isinstance(recent, str):
