@@ -13,6 +13,7 @@ A local-first writing application for long-form fiction with Scrivener-like UX, 
 - **Full-text and semantic search**
 - **Multi-format import/export**: DOCX, Markdown, Fountain, Final Draft XML, EPUB
 - **Bibliography management**: BibTeX support with CSL formatting
+- **Zero telemetry**: All third-party telemetry is disabled by default
 
 ## Installation
 
@@ -51,6 +52,22 @@ mypy nico
 # Run the application
 python -m nico
 ```
+
+## Privacy
+
+nico takes your privacy seriously. All third-party telemetry is **disabled by default**:
+
+- ChromaDB/PostHog analytics: **OFF**
+- Hugging Face telemetry: **OFF**
+- All tracking headers: **OFF**
+
+The application sets these environment variables on startup:
+- `ANONYMIZED_TELEMETRY=False`
+- `POSTHOG_DISABLED=1`
+- `HF_HUB_DISABLE_TELEMETRY=1`
+- `DO_NOT_TRACK=1`
+
+Your writing stays on your machine. Period.
 
 ## Project Structure
 

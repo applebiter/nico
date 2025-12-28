@@ -1,6 +1,11 @@
 """Main entry point for the nico application."""
 
 import sys
+
+# Disable all telemetry FIRST, before any other imports
+from nico.config import disable_telemetry
+disable_telemetry()
+
 from PySide6.QtWidgets import QApplication
 
 
