@@ -2,10 +2,10 @@
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from PySide6.QtWidgets import (
     QFileDialog,
     QInputDialog,
@@ -54,8 +54,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.current_project: Optional[Project] = None
         self.database: Optional[Database] = None
+        self.settings = QSettings("nico", "nico")
         self._init_ui()
         self._create_menus()
+        self._update_recent_projects_menu()
 
     def _init_ui(self) -> None:
         """Initialize the user interface."""
@@ -114,6 +116,12 @@ class MainWindow(QMainWindow):
         open_project_action.triggered.connect(self._on_open_project)
 
         file_menu.addSeparator()
+        
+        # Recent projects submenu
+        self.recent_menu = file_menu.addMenu("Open &Recent")
+        self.recent_menu.aboutToShow.connect(self._update_recent_projects_menu)
+
+        file_menu.addSeparator()
 
         close_project_action = file_menu.addAction("&Close Project")
         close_project_action.triggered.connect(self._on_close_project)
@@ -169,6 +177,9 @@ class MainWindow(QMainWindow):
                     local_only_ai=data["local_only_ai"],
                 )
                 
+                # Add to recent projects
+                self._add_recent_project(project_path / data["name"])
+                
                 # Update UI
                 self._load_project()
                 
@@ -191,33 +202,39 @@ class MainWindow(QMainWindow):
         )
         
         if folder:
-            try:
-                project_path = Path(folder)
-                db_path = project_path / "project.sqlite3"
-                
-                if not db_path.exists():
-                    QMessageBox.critical(
-                        self,
-                        "Error",
-                        f"No project found at:\n{folder}\n\nMake sure you're opening a nico project folder.",
-                    )
-                    return
-                
-                # Initialize database
-                self.database = Database(db_path)
-                
-                # Open project using use case
-                session = next(self.database.get_session())
-                project_repo = ProjectRepository(session)
-                
-                open_project = OpenProjectUseCase(project_repo)
-                self.current_project = open_project.execute(project_path)
-                
-                # Update UI
-                self._load_project()
-                
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to open project:\n{str(e)}")
+            self._open_project_path(Path(folder))
+    
+    def _open_project_path(self, project_path: Path) -> None:
+        """Open a project from a given path."""
+        try:
+            db_path = project_path / "project.sqlite3"
+            
+            if not db_path.exists():
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"No project found at:\n{project_path}\n\nMake sure you're opening a nico project folder.",
+                )
+                return
+            
+            # Initialize database
+            self.database = Database(db_path)
+            
+            # Open project using use case
+            session = next(self.database.get_session())
+            project_repo = ProjectRepository(session)
+            
+            open_project = OpenProjectUseCase(project_repo)
+            self.current_project = open_project.execute(project_path)
+            
+            # Add to recent projects
+            self._add_recent_project(project_path)
+            
+            # Update UI
+            self._load_project()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open project:\n{str(e)}")
 
     def _on_close_project(self) -> None:
         """Handle closing the current project."""
@@ -555,6 +572,60 @@ class MainWindow(QMainWindow):
             iterator += 1
         return None
 
+    def _get_recent_projects(self) -> List[str]:
+        """Get list of recent project paths."""
+        recent = self.settings.value("recent_projects", [])
+        if isinstance(recent, str):
+            recent = [recent] if recent else []
+        return recent or []
+    
+    def _add_recent_project(self, project_path: Path) -> None:
+        """Add a project to the recent projects list."""
+        path_str = str(project_path)
+        recent = self._get_recent_projects()
+        
+        # Remove if already exists
+        if path_str in recent:
+            recent.remove(path_str)
+        
+        # Add to front
+        recent.insert(0, path_str)
+        
+        # Keep only last 10
+        recent = recent[:10]
+        
+        self.settings.setValue("recent_projects", recent)
+    
+    def _update_recent_projects_menu(self) -> None:
+        """Update the recent projects menu."""
+        self.recent_menu.clear()
+        
+        recent = self._get_recent_projects()
+        
+        if not recent:
+            action = self.recent_menu.addAction("No recent projects")
+            action.setEnabled(False)
+            return
+        
+        for path_str in recent:
+            path = Path(path_str)
+            if path.exists():
+                action = self.recent_menu.addAction(path.name)
+                action.triggered.connect(lambda checked=False, p=path: self._open_project_path(p))
+            else:
+                # Show but disable non-existent paths
+                action = self.recent_menu.addAction(f"{path.name} (missing)")
+                action.setEnabled(False)
+        
+        self.recent_menu.addSeparator()
+        clear_action = self.recent_menu.addAction("Clear Recent Projects")
+        clear_action.triggered.connect(self._clear_recent_projects)
+    
+    def _clear_recent_projects(self) -> None:
+        """Clear the recent projects list."""
+        self.settings.setValue("recent_projects", [])
+        self._update_recent_projects_menu()
+    
     def _on_about(self) -> None:
         """Show about dialog."""
         QMessageBox.about(
