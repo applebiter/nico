@@ -61,7 +61,7 @@ python -m nico
 
 ## License
 
-TBD
+MIT License - See [LICENSE](LICENSE) for details.
 
 ## Architecture
 
