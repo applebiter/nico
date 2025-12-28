@@ -8,7 +8,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFileDialog,
     QInputDialog,
-    QLabel,
     QMainWindow,
     QMessageBox,
     QSplitter,
@@ -27,7 +26,10 @@ from nico.application.use_cases import (
     ListScenesUseCase,
     ListStoriesUseCase,
     OpenProjectUseCase,
+    UpdateChapterUseCase,
     UpdateSceneDocumentUseCase,
+    UpdateSceneUseCase,
+    UpdateStoryUseCase,
 )
 from nico.domain.models import Project
 from nico.infrastructure.persistence import (
@@ -39,6 +41,7 @@ from nico.infrastructure.persistence import (
     StoryRepository,
 )
 from nico.presentation.ui.binder_tree import BinderTreeWidget
+from nico.presentation.ui.inspector_panel import InspectorPanel
 from nico.presentation.ui.new_project_dialog import NewProjectDialog
 from nico.presentation.ui.scene_editor import SceneEditor
 
@@ -80,17 +83,14 @@ class MainWindow(QMainWindow):
         self.scene_editor.content_changed.connect(self._on_scene_content_changed)
 
         # Inspector (right panel)
-        self.inspector_widget = QWidget()
-        inspector_layout = QVBoxLayout(self.inspector_widget)
-        inspector_layout.setContentsMargins(10, 10, 10, 10)
-        
-        self.inspector_label = QLabel("Inspector")
-        inspector_layout.addWidget(self.inspector_label)
+        self.inspector_panel = InspectorPanel()
+        self.inspector_panel.title_changed.connect(self._on_inspector_title_changed)
+        self.inspector_panel.synopsis_changed.connect(self._on_inspector_synopsis_changed)
 
         # Add panels to splitter
         main_splitter.addWidget(self.binder_widget)
         main_splitter.addWidget(self.scene_editor)
-        main_splitter.addWidget(self.inspector_widget)
+        main_splitter.addWidget(self.inspector_panel)
 
         # Set initial sizes: binder 20%, editor 50%, inspector 30%
         main_splitter.setSizes([280, 700, 420])
@@ -229,6 +229,7 @@ class MainWindow(QMainWindow):
             self.database = None
             self.binder_tree.clear_project()
             self.scene_editor.clear()
+            self.inspector_panel.clear()
             self.setWindowTitle("nico")
 
     def _load_project(self) -> None:
@@ -275,8 +276,51 @@ class MainWindow(QMainWindow):
 
     def _on_binder_item_selected(self, item_type: str, item_id: UUID) -> None:
         """Handle binder item selection."""
-        # Update inspector with metadata (TODO: implement inspector)
-        pass
+        if not self.database:
+            return
+        
+        try:
+            session = next(self.database.get_session())
+            
+            if item_type == "story":
+                story_repo = StoryRepository(session)
+                story = story_repo.get_by_id(item_id)
+                if story:
+                    self.inspector_panel.load_item(
+                        "story",
+                        story.id,
+                        story.title,
+                        story.synopsis
+                    )
+            elif item_type == "chapter":
+                chapter_repo = ChapterRepository(session)
+                chapter = chapter_repo.get_by_id(item_id)
+                if chapter:
+                    self.inspector_panel.load_item(
+                        "chapter",
+                        chapter.id,
+                        chapter.title,
+                        chapter.synopsis
+                    )
+            elif item_type == "scene":
+                scene_repo = SceneRepository(session)
+                scene = scene_repo.get_by_id(item_id)
+                if scene:
+                    # Calculate word count from document
+                    word_count = 0
+                    if scene.document and scene.document.content:
+                        word_count = self._calculate_word_count(scene.document.content)
+                    
+                    self.inspector_panel.load_item(
+                        "scene",
+                        scene.id,
+                        scene.title,
+                        scene.synopsis,
+                        word_count,
+                        scene.status
+                    )
+        except Exception as e:
+            print(f"Error loading metadata: {e}")
 
     def _on_binder_item_double_clicked(self, item_type: str, item_id: UUID) -> None:
         """Handle binder item double-click."""
@@ -320,9 +364,89 @@ class MainWindow(QMainWindow):
                 content=content_json,
                 create_revision=False  # Only create revisions on manual save
             )
+            
+            # Update word count in inspector if this scene is selected
+            if (self.inspector_panel.current_item_type == "scene" and 
+                self.inspector_panel.current_item_id == scene_id):
+                word_count = self._calculate_word_count(content_json)
+                self.inspector_panel.update_word_count(word_count)
         except Exception as e:
             # Log error but don't interrupt user's workflow
             print(f"Autosave error: {e}")
+
+    def _calculate_word_count(self, content_json: str) -> int:
+        """Calculate word count from ProseMirror JSON."""
+        try:
+            import json
+            doc = json.loads(content_json)
+            text_parts = []
+            
+            for node in doc.get("content", []):
+                if node.get("type") == "paragraph":
+                    for content_node in node.get("content", []):
+                        if content_node.get("type") == "text":
+                            text_parts.append(content_node.get("text", ""))
+            
+            full_text = " ".join(text_parts)
+            words = full_text.split()
+            return len(words)
+        except Exception:
+            return 0
+
+    def _on_inspector_title_changed(self, item_type: str, item_id: UUID, new_title: str) -> None:
+        """Handle title changes from inspector."""
+        if not self.database:
+            return
+        
+        try:
+            session = next(self.database.get_session())
+            
+            if item_type == "story":
+                story_repo = StoryRepository(session)
+                update_story = UpdateStoryUseCase(story_repo)
+                update_story.execute(item_id, title=new_title)
+            elif item_type == "chapter":
+                chapter_repo = ChapterRepository(session)
+                update_chapter = UpdateChapterUseCase(chapter_repo)
+                update_chapter.execute(item_id, title=new_title)
+            elif item_type == "scene":
+                scene_repo = SceneRepository(session)
+                update_scene = UpdateSceneUseCase(scene_repo)
+                update_scene.execute(item_id, title=new_title)
+                # Update editor title if this scene is open
+                if self.scene_editor.current_scene_id == item_id:
+                    self.scene_editor.title_label.setText(new_title)
+            
+            # Update binder tree
+            item = self._find_tree_item(item_type, item_id)
+            if item:
+                item.setText(0, new_title)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to update title:\n{str(e)}")
+
+    def _on_inspector_synopsis_changed(self, item_type: str, item_id: UUID, new_synopsis: str) -> None:
+        """Handle synopsis changes from inspector."""
+        if not self.database:
+            return
+        
+        try:
+            session = next(self.database.get_session())
+            
+            if item_type == "story":
+                story_repo = StoryRepository(session)
+                update_story = UpdateStoryUseCase(story_repo)
+                update_story.execute(item_id, synopsis=new_synopsis)
+            elif item_type == "chapter":
+                chapter_repo = ChapterRepository(session)
+                update_chapter = UpdateChapterUseCase(chapter_repo)
+                update_chapter.execute(item_id, synopsis=new_synopsis)
+            elif item_type == "scene":
+                scene_repo = SceneRepository(session)
+                update_scene = UpdateSceneUseCase(scene_repo)
+                update_scene.execute(item_id, synopsis=new_synopsis)
+        except Exception as e:
+            # Don't interrupt typing with error messages
+            print(f"Error updating synopsis: {e}")
 
     def _on_add_story(self) -> None:
         """Handle adding a new story."""
