@@ -8,19 +8,21 @@ disable_telemetry()
 
 from PySide6.QtWidgets import QApplication
 
+from nico.presentation.ui.main_window import MainWindow
 
-def main():
+
+def main() -> int:
     """Initialize and run the nico application."""
     app = QApplication(sys.argv)
     app.setApplicationName("nico")
     app.setOrganizationName("nico")
     app.setApplicationVersion("0.1.0")
     
-    # TODO: Initialize main window
-    print("nico - Narrative Insight Composition Output")
-    print("Application structure initialized. Main window coming soon...")
+    # Create and show main window
+    window = MainWindow()
+    window.show()
     
-    return 0  # Temporary exit until we have a main window
+    return app.exec()
 
 
 if __name__ == "__main__":
