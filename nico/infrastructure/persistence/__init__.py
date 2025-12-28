@@ -12,6 +12,14 @@ from .models import (
     SceneRevisionModel,
     StoryModel,
 )
+from .repositories import (
+    ChapterRepository,
+    CharacterRepository,
+    ProjectRepository,
+    SceneDocumentRepository,
+    SceneRepository,
+    StoryRepository,
+)
 
 __all__ = [
     "Database",
@@ -24,4 +32,10 @@ __all__ = [
     "SceneRevisionModel",
     "CharacterModel",
     "CharacterTraitModel",
+    "ProjectRepository",
+    "StoryRepository",
+    "ChapterRepository",
+    "SceneRepository",
+    "SceneDocumentRepository",
+    "CharacterRepository",
 ]
