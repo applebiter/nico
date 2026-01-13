@@ -4,13 +4,24 @@ from nico import config  # noqa: F401
 
 import sys
 
+from PySide6.QtWidgets import QApplication
+
+from nico.presentation.main_window import MainWindow
+
 
 def main() -> int:
     """Main entry point for the application."""
-    print("Nico - Narrative Insight Composition Output")
-    print("Version: 0.1.0")
-    print("\n[Status: Early development - database models in progress]")
-    return 0
+    # Create Qt application
+    app = QApplication(sys.argv)
+    app.setApplicationName("Nico")
+    app.setOrganizationName("Applebiter")
+    
+    # Create and show main window
+    window = MainWindow()
+    window.show()
+    
+    # Run event loop
+    return app.exec()
 
 
 if __name__ == "__main__":
