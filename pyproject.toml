@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nico"
+version = "0.1.0"
+description = "Narrative Insight Composition Output - A privacy-first writing application"
+authors = [
+    {name = "Applebiter", email = "applebiterconsulting@gmail.com"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.13"
+keywords = ["writing", "narrative", "scrivener", "worldbuilding", "ai"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Editors",
+    "Topic :: Multimedia",
+]
+
+dependencies = [
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg2-binary>=2.9",
+    "pgvector>=0.2",
+    "pydantic>=2.0",
+    "pyside6>=6.6",
+    "chromadb>=0.4",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "pytest-asyncio>=0.21",
+    "black>=23.0",
+    "ruff>=0.1",
+    "mypy>=1.7",
+    "ipython>=8.0",
+]
+
+ai = [
+    "openai>=1.0",
+    "anthropic>=0.8",
+    "google-generativeai>=0.3",
+]
+
+[project.scripts]
+nico = "nico.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nico*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=nico --cov-report=html --cov-report=term-missing"
