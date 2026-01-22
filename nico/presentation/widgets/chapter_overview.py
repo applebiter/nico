@@ -14,9 +14,11 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QToolButton,
+    QMessageBox,
 )
 
 from nico.domain.models import Chapter
+from nico.application.context import get_app_context
 
 
 class ChapterOverview(QWidget):
@@ -30,10 +32,13 @@ class ChapterOverview(QWidget):
     scenes_reordered = Signal(list)  # list of scene_ids in new order
     # Signal emitted when user wants continuous writing mode
     continuous_writing_requested = Signal(int)  # chapter_id
+    # Signal emitted when chapter is updated (edited/deleted)
+    chapter_updated = Signal()
     
     def __init__(self) -> None:
         super().__init__()
         self.current_chapter: Optional[Chapter] = None
+        self.app_context = get_app_context()
         self._setup_ui()
         
     def _setup_ui(self) -> None:
@@ -51,9 +56,19 @@ class ChapterOverview(QWidget):
         
         # Header
         header = QVBoxLayout()
+        
+        # Title row with delete button
+        title_row = QHBoxLayout()
         self.title_label = QLabel("Chapter")
         self.title_label.setStyleSheet("font-size: 24px; font-weight: bold;")
-        header.addWidget(self.title_label)
+        title_row.addWidget(self.title_label)
+        title_row.addStretch()
+        
+        self.delete_btn = QPushButton("🗑️ Delete Chapter")
+        self.delete_btn.clicked.connect(self._on_delete_chapter)
+        title_row.addWidget(self.delete_btn)
+        
+        header.addLayout(title_row)
         
         self.description_label = QLabel("")
         self.description_label.setWordWrap(True)
@@ -201,3 +216,38 @@ class ChapterOverview(QWidget):
             if scene_id:
                 scene_ids.append(scene_id)
         self.scenes_reordered.emit(scene_ids)
+    
+    def _on_delete_chapter(self) -> None:
+        """Delete the current chapter after confirmation."""
+        if not self.current_chapter:
+            return
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Delete Chapter",
+            f"Are you sure you want to delete '{self.current_chapter.title}'?\n\nThis will also delete all scenes in this chapter.\n\nThis action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Delete the chapter using session directly
+                if hasattr(self.app_context, '_session') and self.app_context._session:
+                    self.app_context._session.delete(self.current_chapter)
+                    self.app_context.commit()
+                    self.current_chapter = None
+                    self.chapter_updated.emit()
+                    QMessageBox.information(
+                        self,
+                        "Chapter Deleted",
+                        "The chapter has been deleted."
+                    )
+            except Exception as e:
+                self.app_context.rollback()
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"An error occurred while deleting the chapter:\n{str(e)}"
+                )

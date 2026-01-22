@@ -58,7 +58,7 @@ class EditorWidget(QWidget):
         self.chapter_overview.continuous_writing_requested.connect(self._on_continuous_writing_requested)
         self.characters_overview.character_selected.connect(self.character_selected.emit)
         
-        # Note: character_updated and story_updated signals will be connected in main_window
+        # Note: character_updated, story_updated, chapter_updated, scene_updated, and create_story signals will be connected in main_window
         
         # Add to stack
         self.stack.addWidget(self.project_overview)

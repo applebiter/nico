@@ -173,6 +173,16 @@ class MainWindow(QMainWindow):
         
         # Connect stories overview updates to refresh binder
         self.editor.stories_overview.story_updated.connect(self._on_story_updated)
+        self.editor.stories_overview.create_story_requested.connect(self._on_create_story)
+        
+        # Connect story overview updates
+        self.editor.story_overview.story_updated.connect(self._on_story_updated)
+        
+        # Connect chapter overview updates
+        self.editor.chapter_overview.chapter_updated.connect(self._on_chapter_updated)
+        
+        # Connect scene editor updates
+        self.editor.scene_editor.scene_updated.connect(self._on_scene_updated)
         
         self.main_splitter.addWidget(self.editor)
         
@@ -571,6 +581,37 @@ class MainWindow(QMainWindow):
                 # Show stories overview after deletion/update
                 self.editor.show_stories_overview(refreshed_project)
                 self.statusBar().showMessage("Stories updated")
+    
+    def _on_chapter_updated(self) -> None:
+        """Handle chapter updates (create/edit/delete) - refresh binder and show overview."""
+        if self.binder.current_project:
+            # Reload project to refresh binder
+            refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+            if refreshed_project:
+                self.binder.load_project(refreshed_project)
+                # Show stories overview after chapter deletion
+                self.editor.show_stories_overview(refreshed_project)
+                self.statusBar().showMessage("Chapter updated")
+    
+    def _on_scene_updated(self) -> None:
+        """Handle scene updates (create/edit/delete) - refresh binder and show overview."""
+        if self.binder.current_project:
+            # Reload project to refresh binder
+            refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+            if refreshed_project:
+                self.binder.load_project(refreshed_project)
+                # Show stories overview after scene deletion
+                self.editor.show_stories_overview(refreshed_project)
+                self.statusBar().showMessage("Scene updated")
+    
+    def _on_create_story(self) -> None:
+        """Handle create story request."""
+        # For now, show a message - this would open a story creation dialog
+        QMessageBox.information(
+            self,
+            "Create Story",
+            "Story creation dialog will be implemented soon.\n\nFor now, you can generate stories from templates using File > Generate Story from Template."
+        )
     
     def _on_item_deleted(self, item_type: str) -> None:
         """Handle item deletion from binder - show appropriate overview."""

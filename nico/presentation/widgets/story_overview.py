@@ -14,9 +14,11 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QToolButton,
+    QMessageBox,
 )
 
 from nico.domain.models import Story
+from nico.application.context import get_app_context
 
 
 class StoryOverview(QWidget):
@@ -28,10 +30,13 @@ class StoryOverview(QWidget):
     chapter_selected = Signal(int)  # chapter_id
     # Signal emitted when chapter order changes
     chapters_reordered = Signal(list)  # list of chapter_ids in new order
+    # Signal emitted when story is updated (edited/deleted)
+    story_updated = Signal()
     
     def __init__(self) -> None:
         super().__init__()
         self.current_story: Optional[Story] = None
+        self.app_context = get_app_context()
         self._setup_ui()
         
     def _setup_ui(self) -> None:
@@ -49,9 +54,19 @@ class StoryOverview(QWidget):
         
         # Header
         header = QVBoxLayout()
+        
+        # Title row with delete button
+        title_row = QHBoxLayout()
         self.title_label = QLabel("Story")
         self.title_label.setStyleSheet("font-size: 24px; font-weight: bold;")
-        header.addWidget(self.title_label)
+        title_row.addWidget(self.title_label)
+        title_row.addStretch()
+        
+        self.delete_btn = QPushButton("🗑️ Delete Story")
+        self.delete_btn.clicked.connect(self._on_delete_story)
+        title_row.addWidget(self.delete_btn)
+        
+        header.addLayout(title_row)
         
         self.description_label = QLabel("")
         self.description_label.setWordWrap(True)
@@ -209,3 +224,38 @@ class StoryOverview(QWidget):
             if chapter_id:
                 chapter_ids.append(chapter_id)
         self.chapters_reordered.emit(chapter_ids)
+    
+    def _on_delete_story(self) -> None:
+        """Delete the current story after confirmation."""
+        if not self.current_story:
+            return
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Delete Story",
+            f"Are you sure you want to delete '{self.current_story.title}'?\n\nThis will also delete all chapters and scenes in this story.\n\nThis action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Delete the story using session directly
+                if hasattr(self.app_context, '_session') and self.app_context._session:
+                    self.app_context._session.delete(self.current_story)
+                    self.app_context.commit()
+                    self.current_story = None
+                    self.story_updated.emit()
+                    QMessageBox.information(
+                        self,
+                        "Story Deleted",
+                        "The story has been deleted."
+                    )
+            except Exception as e:
+                self.app_context.rollback()
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"An error occurred while deleting the story:\n{str(e)}"
+                )

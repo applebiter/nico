@@ -12,11 +12,13 @@ from PySide6.QtWidgets import (
     QComboBox,
     QPushButton,
     QStackedWidget,
+    QMessageBox,
 )
 from PySide6.QtGui import QFont
 
 from nico.domain.models import Scene
 from nico.presentation.widgets.continuous_writing import ContinuousWritingWidget
+from nico.application.context import get_app_context
 
 
 class SceneEditor(QWidget):
@@ -24,11 +26,14 @@ class SceneEditor(QWidget):
     
     # Signal emitted when switching to continuous mode for a chapter
     continuous_mode_requested = Signal(int)  # chapter_id
+    # Signal emitted when scene is updated (edited/deleted)
+    scene_updated = Signal()
     
     def __init__(self) -> None:
         super().__init__()
         self.current_scene: Optional[Scene] = None
         self.current_chapter_id: Optional[int] = None
+        self.app_context = get_app_context()
         self._setup_ui()
         
     def _setup_ui(self) -> None:
@@ -71,6 +76,11 @@ class SceneEditor(QWidget):
         header.addWidget(self.scene_title)
         
         header.addStretch()
+        
+        self.delete_btn = QPushButton("🗑️ Delete Scene")
+        self.delete_btn.clicked.connect(self._on_delete_scene)
+        self.delete_btn.setVisible(False)  # Hidden until scene is loaded
+        header.addWidget(self.delete_btn)
         
         self.word_count = QLabel("0 words")
         self.word_count.setStyleSheet("color: #666;")
@@ -139,6 +149,7 @@ class SceneEditor(QWidget):
         # Update header
         self.scene_title.setText(f"✍️ {scene.title}")
         self.word_count.setText(f"{scene.word_count:,} words")
+        self.delete_btn.setVisible(True)
         
         # Load content
         self.editor.setHtml(scene.content)
@@ -192,3 +203,40 @@ class SceneEditor(QWidget):
     def _on_underline(self) -> None:
         """Toggle underline formatting."""
         pass
+    
+    def _on_delete_scene(self) -> None:
+        """Delete the current scene after confirmation."""
+        if not self.current_scene:
+            return
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Delete Scene",
+            f"Are you sure you want to delete '{self.current_scene.title}'?\n\nThis action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Delete the scene using repository
+                self.app_context.scene_service.scene_repo.delete(self.current_scene.id)
+                self.app_context.commit()
+                self.current_scene = None
+                self.scene_title.setText("No scene selected")
+                self.editor.clear()
+                self.delete_btn.setVisible(False)
+                self.scene_updated.emit()
+                QMessageBox.information(
+                    self,
+                    "Scene Deleted",
+                    "The scene has been deleted."
+                )
+            except Exception as e:
+                self.app_context.rollback()
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"An error occurred while deleting the scene:\n{str(e)}"
+                )
