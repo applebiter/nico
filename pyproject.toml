@@ -32,6 +32,7 @@ dependencies = [
     "pyside6>=6.6",
     "chromadb>=0.4",
     "python-dotenv>=1.0",
+    "aiohttp>=3.9",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +50,15 @@ ai = [
     "openai>=1.0",
     "anthropic>=0.8",
     "google-generativeai>=0.3",
+    "sentence-transformers>=2.2",
+]
+
+embedding-server = [
+    "fastapi>=0.104",
+    "uvicorn[standard]>=0.24",
+    "sentence-transformers>=2.2",
+    "pillow>=10.0",
+    "torch>=2.0",
 ]
 
 [project.scripts]

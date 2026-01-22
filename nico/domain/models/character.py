@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from .base import Base, TimestampMixin
 
@@ -90,6 +91,9 @@ class Character(Base, TimestampMixin):
     
     # Description and psychology
     physical_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    image_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    image_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # The full prompt used to generate the image
+    image_embedding: Mapped[Optional[list]] = mapped_column(Vector(768), nullable=True)  # nomic-embed-text embedding dimension
     myers_briggs: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     enneagram: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     wounds: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

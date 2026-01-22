@@ -4,6 +4,22 @@ do_not_track/
 .env
 .env.*
 
+# User data and generated content
+media/
+chroma/
+exports/
+cache/
+*.sqlite3
+*.db
+
+# Database connection configs (if any local overrides exist)
+database.ini
+db_config.json
+
+# Generated AI content
+**/portraits/
+**/generated_images/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -45,14 +61,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
-
-# Project data (local user projects)
-*.sqlite3
-*.db
-media/
-chroma/
-exports/
-cache/
 
 # Testing
 .pytest_cache/

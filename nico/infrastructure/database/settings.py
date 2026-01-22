@@ -12,13 +12,22 @@ class Settings:
     """Application settings loaded from environment variables."""
     
     # Database
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql://sysadmin:nx8J33aY@localhost:5432/nico"
-    )
+    DATABASE_URL: str = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        raise ValueError(
+            "DATABASE_URL environment variable is required. "
+            "Please create a .env file with your database connection string."
+        )
+    
+    # Embedding Service
+    EMBEDDING_SERVICE_URL: str | None = os.getenv("EMBEDDING_SERVICE_URL")
+    EMBEDDING_FALLBACK_LOCAL: bool = os.getenv(
+        "EMBEDDING_FALLBACK_LOCAL", "true"
+    ).lower() == "true"
     
     # Ollama
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "nomic-embed-text:latest")
     
     # Optional AI provider API keys
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
