@@ -156,8 +156,8 @@ class StoriesOverview(QWidget):
             subtitle += f"{scene_count} scene{'s' if scene_count != 1 else ''}, "
             subtitle += f"{word_count:,} words"
             
-            if story.premise:
-                display_text += f"\n{subtitle}\n   {story.premise[:80]}{'...' if len(story.premise) > 80 else ''}"
+            if story.description:
+                display_text += f"\n{subtitle}\n   {story.description[:80]}{'...' if len(story.description) > 80 else ''}"
             else:
                 display_text += f"\n{subtitle}"
             
