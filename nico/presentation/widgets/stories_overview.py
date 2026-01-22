@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from nico.domain.models import Project
 from nico.application.context import get_app_context
+from nico.presentation.widgets.story_dialog import StoryDialog
 
 
 class StoriesOverview(QWidget):
@@ -197,4 +198,11 @@ class StoriesOverview(QWidget):
     
     def _on_create_story(self) -> None:
         """Handle create story request."""
-        self.create_story_requested.emit()
+        if not self.current_project:
+            return
+        
+        dialog = StoryDialog(self.current_project.id, parent=self)
+        if dialog.exec():
+            # Refresh the list and emit update signal
+            self.load_project(self.current_project)
+            self.story_updated.emit()

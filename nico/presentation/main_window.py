@@ -26,6 +26,7 @@ from nico.presentation.widgets.llm_team_dialog import LLMTeamDialog
 from nico.presentation.widgets.character_dialog import CharacterDialog
 from nico.presentation.widgets.location_dialog import LocationDialog
 from nico.presentation.widgets.event_dialog import EventDialog
+from nico.presentation.widgets.story_dialog import StoryDialog
 from nico.application.context import get_app_context
 from nico.preferences import get_preferences
 from nico.theme import Theme
@@ -606,12 +607,18 @@ class MainWindow(QMainWindow):
     
     def _on_create_story(self) -> None:
         """Handle create story request."""
-        # For now, show a message - this would open a story creation dialog
-        QMessageBox.information(
-            self,
-            "Create Story",
-            "Story creation dialog will be implemented soon.\n\nFor now, you can generate stories from templates using File > Generate Story from Template."
-        )
+        if not self.binder.current_project:
+            QMessageBox.warning(
+                self,
+                "No Project",
+                "Please select a project before creating a story."
+            )
+            return
+        
+        dialog = StoryDialog(self.binder.current_project.id, parent=self)
+        if dialog.exec():
+            # Story was created, refresh binder and show stories overview
+            self._on_story_updated()
     
     def _on_item_deleted(self, item_type: str) -> None:
         """Handle item deletion from binder - show appropriate overview."""
