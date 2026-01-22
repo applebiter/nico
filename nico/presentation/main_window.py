@@ -154,6 +154,9 @@ class MainWindow(QMainWindow):
         self.binder.stories_collection_selected.connect(self._on_stories_collection_selected)
         self.binder.characters_collection_selected.connect(self._on_characters_collection_selected)
         
+        # Connect item deletion to show appropriate overview
+        self.binder.item_deleted.connect(self._on_item_deleted)
+        
         self.main_splitter.addWidget(self.binder)
         
         # Center panel: Editor
@@ -167,6 +170,9 @@ class MainWindow(QMainWindow):
         # Connect character profile and overview updates to refresh binder
         self.editor.character_profile.character_updated.connect(self._on_character_updated)
         self.editor.characters_overview.character_updated.connect(self._on_character_updated)
+        
+        # Connect stories overview updates to refresh binder
+        self.editor.stories_overview.story_updated.connect(self._on_story_updated)
         
         self.main_splitter.addWidget(self.editor)
         
@@ -535,7 +541,7 @@ class MainWindow(QMainWindow):
     def _on_stories_collection_selected(self) -> None:
         """Handle Stories collection selection from binder."""
         if self.binder.current_project:
-            self.editor.show_project(self.binder.current_project)
+            self.editor.show_stories_overview(self.binder.current_project)
             self.statusBar().showMessage("Viewing stories overview")
     
     def _on_characters_collection_selected(self) -> None:
@@ -554,3 +560,26 @@ class MainWindow(QMainWindow):
                 # Show characters overview after deletion/update
                 self.editor.show_characters_overview(refreshed_project)
                 self.statusBar().showMessage("Characters updated")
+    
+    def _on_story_updated(self) -> None:
+        """Handle story updates (create/edit/delete) - refresh binder and show overview."""
+        if self.binder.current_project:
+            # Reload project to refresh binder
+            refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+            if refreshed_project:
+                self.binder.load_project(refreshed_project)
+                # Show stories overview after deletion/update
+                self.editor.show_stories_overview(refreshed_project)
+                self.statusBar().showMessage("Stories updated")
+    
+    def _on_item_deleted(self, item_type: str) -> None:
+        """Handle item deletion from binder - show appropriate overview."""
+        if not self.binder.current_project:
+            return
+        
+        # Show appropriate overview based on what was deleted
+        if item_type in ("story", "chapter", "scene"):
+            self.editor.show_stories_overview(self.binder.current_project)
+        elif item_type == "character":
+            self.editor.show_characters_overview(self.binder.current_project)
+        # For locations and events, we could add overviews later

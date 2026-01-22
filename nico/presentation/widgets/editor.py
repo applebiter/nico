@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from nico.domain.models import Scene, Project, Story, Chapter, Character, Location, Event
 from nico.presentation.widgets.project_overview import ProjectOverview
 from nico.presentation.widgets.story_overview import StoryOverview
+from nico.presentation.widgets.stories_overview import StoriesOverview
 from nico.presentation.widgets.chapter_overview import ChapterOverview
 from nico.presentation.widgets.scene_editor import SceneEditor
 from nico.presentation.widgets.character_profile import CharacterProfileWidget
@@ -40,6 +41,7 @@ class EditorWidget(QWidget):
         
         # Create views
         self.project_overview = ProjectOverview()
+        self.stories_overview = StoriesOverview()
         self.story_overview = StoryOverview()
         self.chapter_overview = ChapterOverview()
         self.scene_editor = SceneEditor()
@@ -50,15 +52,17 @@ class EditorWidget(QWidget):
         
         # Connect navigation signals
         self.project_overview.story_selected.connect(self.story_selected.emit)
+        self.stories_overview.story_selected.connect(self.story_selected.emit)
         self.story_overview.chapter_selected.connect(self.chapter_selected.emit)
         self.chapter_overview.scene_selected.connect(self.scene_selected.emit)
         self.chapter_overview.continuous_writing_requested.connect(self._on_continuous_writing_requested)
         self.characters_overview.character_selected.connect(self.character_selected.emit)
         
-        # Note: character_updated signal will be connected in main_window
+        # Note: character_updated and story_updated signals will be connected in main_window
         
         # Add to stack
         self.stack.addWidget(self.project_overview)
+        self.stack.addWidget(self.stories_overview)
         self.stack.addWidget(self.story_overview)
         self.stack.addWidget(self.chapter_overview)
         self.stack.addWidget(self.scene_editor)
@@ -109,6 +113,11 @@ class EditorWidget(QWidget):
         """Display characters overview for a project."""
         self.characters_overview.load_project(project)
         self.stack.setCurrentWidget(self.characters_overview)
+    
+    def show_stories_overview(self, project: Project) -> None:
+        """Display stories overview for a project."""
+        self.stories_overview.load_project(project)
+        self.stack.setCurrentWidget(self.stories_overview)
     
     def show_location(self, location_id: int) -> None:
         """Display location profile."""

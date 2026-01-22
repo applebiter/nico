@@ -37,6 +37,9 @@ class BinderWidget(QWidget):
     locations_collection_selected = Signal()  # When "Locations" node is clicked
     events_collection_selected = Signal()  # When "Events" node is clicked
     
+    # Signal emitted when an item is deleted
+    item_deleted = Signal(str)  # item_type ("story", "chapter", "scene", "character", etc.)
+    
     def __init__(self) -> None:
         super().__init__()
         self.current_project: Optional[Project] = None
@@ -335,6 +338,10 @@ class BinderWidget(QWidget):
                     refreshed_project = self.app_context.project_service.get_project(self.current_project.id)
                     if refreshed_project:
                         self.load_project(refreshed_project)
+                
+                # Emit signal so main window can handle showing appropriate overview
+                self.item_deleted.emit(item_type)
+                
                 QMessageBox.information(
                     self,
                     f"{item_type.capitalize()} Deleted",
