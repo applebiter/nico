@@ -59,6 +59,7 @@ class ChapterDialog(QDialog):
         
         # Description (optional)
         self.description_edit = QTextEdit()
+        self.description_edit.setAcceptRichText(False)
         self.description_edit.setPlaceholderText("Chapter synopsis, notes, or outline...")
         self.description_edit.setMaximumHeight(150)
         form.addRow("Description:", self.description_edit)

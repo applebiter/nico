@@ -16,6 +16,8 @@ from nico.domain.models import (
     Location,
     Event,
     Relationship,
+    Media,
+    MediaAttachment,
 )
 
 
@@ -233,5 +235,107 @@ class RelationshipService:
         relationship = self.relationship_repo.get_by_id(relationship_id)
         if relationship:
             self.relationship_repo.delete(relationship_id)
+            return True
+        return False
+
+
+class MediaService:
+    """Service for media library operations."""
+    
+    def __init__(self, session) -> None:
+        self.session = session
+    
+    def list_media(self, project_id: int) -> List[Media]:
+        """Get all media items in a project."""
+        return self.session.query(Media).filter(
+            Media.project_id == project_id
+        ).order_by(Media.created_at.desc()).all()
+    
+    def get_media(self, media_id: int) -> Optional[Media]:
+        """Get media item by ID."""
+        return self.session.query(Media).filter(Media.id == media_id).first()
+    
+    def create_media(
+        self,
+        project_id: int,
+        media_type: str,
+        original_filename: str,
+        file_path: str,
+        mime_type: str,
+        file_size: int,
+        file_hash: str,
+        **kwargs
+    ) -> Media:
+        """Create a new media item."""
+        media = Media(
+            project_id=project_id,
+            media_type=media_type,
+            original_filename=original_filename,
+            file_path=file_path,
+            mime_type=mime_type,
+            file_size=file_size,
+            file_hash=file_hash,
+            **kwargs
+        )
+        self.session.add(media)
+        self.session.commit()
+        return media
+    
+    def update_media(self, media_id: int, **kwargs) -> Optional[Media]:
+        """Update an existing media item."""
+        media = self.get_media(media_id)
+        if media:
+            for key, value in kwargs.items():
+                if hasattr(media, key):
+                    setattr(media, key, value)
+            self.session.commit()
+        return media
+    
+    def delete_media(self, media_id: int) -> bool:
+        """Delete a media item."""
+        media = self.get_media(media_id)
+        if media:
+            self.session.delete(media)
+            self.session.commit()
+            return True
+        return False
+    
+    def attach_media_to_entity(
+        self,
+        media_id: int,
+        entity_type: str,
+        entity_id: int,
+        caption: Optional[str] = None,
+        position: Optional[int] = None
+    ) -> MediaAttachment:
+        """Attach a media item to an entity."""
+        attachment = MediaAttachment(
+            media_id=media_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            caption=caption,
+            position=position or 0,
+        )
+        self.session.add(attachment)
+        self.session.commit()
+        return attachment
+    
+    def get_entity_media(self, entity_type: str, entity_id: int) -> List[Media]:
+        """Get all media attached to an entity."""
+        attachments = self.session.query(MediaAttachment).filter(
+            MediaAttachment.entity_type == entity_type,
+            MediaAttachment.entity_id == entity_id
+        ).order_by(MediaAttachment.position).all()
+        
+        return [att.media for att in attachments]
+    
+    def detach_media_from_entity(self, attachment_id: int) -> bool:
+        """Remove a media attachment."""
+        attachment = self.session.query(MediaAttachment).filter(
+            MediaAttachment.id == attachment_id
+        ).first()
+        if attachment:
+            self.session.delete(attachment)
+            self.session.commit()
             return True
         return False

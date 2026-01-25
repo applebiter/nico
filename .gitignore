@@ -4,6 +4,18 @@ do_not_track/
 .env
 .env.*
 
+# CSV data files (proprietary/sensitive)
+*.csv
+csv_data/
+csv_files/
+/media/sysadmin/
+
+# Database backups
+*.tar.gz
+*.zip
+db_backup/
+backups/
+
 # User data and generated content
 media/
 chroma/

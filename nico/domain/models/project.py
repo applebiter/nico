@@ -9,6 +9,9 @@ from .base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from .story import Story
+    from .symbolic_theme import SymbolicTheme
+    from .symbolic_motif import SymbolicMotif
+    from .media import Media
 
 
 class Project(Base, TimestampMixin):
@@ -46,6 +49,21 @@ class Project(Base, TimestampMixin):
         back_populates="project",
         cascade="all, delete-orphan",
         order_by="Story.position",
+    )
+    symbolic_themes: Mapped[List["SymbolicTheme"]] = relationship(
+        "SymbolicTheme",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    symbolic_motifs: Mapped[List["SymbolicMotif"]] = relationship(
+        "SymbolicMotif",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    media: Mapped[List["Media"]] = relationship(
+        "Media",
+        back_populates="project",
+        cascade="all, delete-orphan",
     )
     
     def __repr__(self) -> str:

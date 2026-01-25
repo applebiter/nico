@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from .base import Base, TimestampMixin
 
@@ -75,6 +76,9 @@ class Event(Base, TimestampMixin):
     # AI and metadata
     exclude_from_ai: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     meta: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    
+    # Semantic search embedding (generated from description + significance + outcome)
+    embedding: Mapped[Optional[list]] = mapped_column(Vector(768), nullable=True)
     
     # Relationships
     project: Mapped["Project"] = relationship("Project")

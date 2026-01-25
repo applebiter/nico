@@ -4,11 +4,13 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from .base import Base, OrderableMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from .chapter import Chapter
+    from .symbolic_occurrence import SymbolicOccurrence
 
 
 class Scene(Base, TimestampMixin, OrderableMixin):
@@ -62,8 +64,16 @@ class Scene(Base, TimestampMixin, OrderableMixin):
     # Example: {"pov": "Alice", "setting": "London", "tags": ["action", "romance"]}
     meta: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     
+    # Semantic search embedding (generated from content + summary + beat + meta)
+    scene_embedding: Mapped[Optional[list]] = mapped_column(Vector(768), nullable=True)
+    
     # Relationships
     chapter: Mapped["Chapter"] = relationship("Chapter", back_populates="scenes")
+    symbolic_occurrences: Mapped[list["SymbolicOccurrence"]] = relationship(
+        "SymbolicOccurrence",
+        back_populates="scene",
+        cascade="all, delete-orphan",
+    )
     
     def __repr__(self) -> str:
         return f"<Scene(id={self.id}, title='{self.title}', words={self.word_count})>"

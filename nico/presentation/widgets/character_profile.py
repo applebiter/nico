@@ -779,12 +779,6 @@ class CharacterProfileWidget(QWidget):
                     self.current_character = self.app_context.character_service.get_character(
                         self.current_character.id
                     )
-                
-                QMessageBox.information(
-                    self,
-                    "Success",
-                    f"Portrait generated successfully!\n\nSaved to: {image_path}"
-                )
             else:
                 QMessageBox.warning(self, "Error", "Failed to load generated image")
         else:

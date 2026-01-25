@@ -10,6 +10,7 @@ from .base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from .project import Project
+    from .character_motif_relationship import CharacterMotifRelationship
 
 
 class Character(Base, TimestampMixin):
@@ -94,6 +95,7 @@ class Character(Base, TimestampMixin):
     image_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     image_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # The full prompt used to generate the image
     image_embedding: Mapped[Optional[list]] = mapped_column(Vector(768), nullable=True)  # nomic-embed-text embedding dimension
+    text_embedding: Mapped[Optional[list]] = mapped_column(Vector(768), nullable=True)  # Text description embedding (separate from image)
     myers_briggs: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     enneagram: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     wounds: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -112,6 +114,11 @@ class Character(Base, TimestampMixin):
     
     # Relationships
     project: Mapped["Project"] = relationship("Project")
+    motif_relationships: Mapped[list["CharacterMotifRelationship"]] = relationship(
+        "CharacterMotifRelationship",
+        back_populates="character",
+        cascade="all, delete-orphan",
+    )
     
     def __repr__(self) -> str:
         name = self.nickname or self.first_name or "Unnamed"

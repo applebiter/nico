@@ -205,7 +205,7 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(self.editor)
         
         # Right panel: Tabbed Inspector and AI
-        self.right_panel = RightPanelWidget()
+        self.right_panel = RightPanelWidget(self.app_context)
         self.main_splitter.addWidget(self.right_panel)
         
         # Set initial sizes (20%, 50%, 30%)

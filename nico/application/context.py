@@ -19,6 +19,7 @@ from nico.application.services import (
     LocationService,
     EventService,
     RelationshipService,
+    MediaService,
 )
 from nico.application.generators import StoryGenerator
 from nico.preferences import get_preferences
@@ -38,6 +39,7 @@ class AppContext:
         self.location_service: Optional[LocationService] = None
         self.event_service: Optional[EventService] = None
         self.relationship_service: Optional[RelationshipService] = None
+        self.media_service: Optional[MediaService] = None
     
     def initialize(self) -> None:
         """Initialize database and services."""
@@ -60,6 +62,7 @@ class AppContext:
         self.location_service = LocationService(location_repo)
         self.event_service = EventService(event_repo)
         self.relationship_service = RelationshipService(relationship_repo)
+        self.media_service = MediaService(self._session)
         
         # Initialize LLM team from preferences
         self._initialize_llm_team()

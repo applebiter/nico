@@ -15,8 +15,9 @@ from PySide6.QtWidgets import (
     QSpinBox,
 )
 
-from nico.domain.models import Story
+from nico.domain.models import Story, WorldBuildingTable, StoryTemplate
 from nico.application.context import get_app_context
+from nico.presentation.widgets.searchable_combo import SearchableComboBox
 
 
 class StoryDialog(QDialog):
@@ -32,6 +33,9 @@ class StoryDialog(QDialog):
         self.setWindowTitle("Edit Story" if self.is_editing else "New Story")
         self.setMinimumWidth(500)
         self.setMinimumHeight(400)
+        
+        # Store templates for later use
+        self._templates = []
         
         self._setup_ui()
         if self.is_editing:
@@ -53,6 +57,36 @@ class StoryDialog(QDialog):
         self.subtitle_edit = QLineEdit()
         self.subtitle_edit.setPlaceholderText("Optional subtitle")
         form.addRow("Subtitle:", self.subtitle_edit)
+        
+        # Genre (with random button)
+        genre_layout = QHBoxLayout()
+        self.genre_edit = SearchableComboBox()
+        self.genre_edit.setEditable(True)
+        genres = self._get_genres()
+        if genres:
+            self.genre_edit.setItems(genres)
+        self.genre_edit.lineEdit().setPlaceholderText("Select or type genre (141 options)")
+        
+        random_genre_btn = QPushButton("🎲")
+        random_genre_btn.setMaximumWidth(40)
+        random_genre_btn.setToolTip("Random genre")
+        random_genre_btn.clicked.connect(self._randomize_genre)
+        
+        genre_layout.addWidget(self.genre_edit)
+        genre_layout.addWidget(random_genre_btn)
+        form.addRow("Genre:", genre_layout)
+        
+        # Template selection (optional)
+        template_layout = QHBoxLayout()
+        self.template_combo = SearchableComboBox()
+        self.template_combo.setEditable(False)
+        templates = self._get_templates()
+        template_items = ["(No template - blank story)"] + [f"{t.name} ({t.get_chapter_count()} chapters, {t.genre})" for t in templates]
+        self.template_combo.setItems(template_items, sort=False)
+        self.template_combo.currentIndexChanged.connect(self._on_template_changed)
+        
+        template_layout.addWidget(self.template_combo)
+        form.addRow("Story Template:", template_layout)
         
         # Description (optional)
         self.description_edit = QTextEdit()
@@ -106,6 +140,50 @@ class StoryDialog(QDialog):
         layout.addLayout(button_layout)
         self.setLayout(layout)
     
+    def _get_genres(self) -> list[str]:
+        """Get list of genres from database."""
+        table = self.app_context._session.query(WorldBuildingTable).filter_by(
+            table_name="what_kind_of_story__).genre"
+        ).first()
+        return table.items if table else []
+    
+    def _get_templates(self) -> list[StoryTemplate]:
+        """Get list of story templates from database."""
+        self._templates = self.app_context._session.query(StoryTemplate).order_by(StoryTemplate.name).all()
+        return self._templates
+    
+    def _randomize_genre(self) -> None:
+        """Pick a random genre."""
+        if self.genre_edit.count() > 0:
+            import random
+            index = random.randint(0, self.genre_edit.count() - 1)
+            text = self.genre_edit.itemText(index)
+            self.genre_edit.setEditText(text)
+    
+    def _on_template_changed(self, index: int) -> None:
+        """Handle template selection change."""
+        if index == 0:
+            # No template selected
+            return
+        
+        # Get the selected template (index-1 because of "No template" option)
+        template_index = index - 1
+        if 0 <= template_index < len(self._templates):
+            template = self._templates[template_index]
+            
+            # Auto-fill genre from template
+            if template.genre:
+                self.genre_edit.setText(template.genre)
+            
+            # Update description with template info
+            current_desc = self.description_edit.toPlainText().strip()
+            template_info = f"\\n\\n[Template: {template.name} - {template.get_chapter_count()} chapters, {len(template.act_structure)} acts]"
+            
+            if not current_desc:
+                self.description_edit.setPlainText(template.description or template_info.strip())
+            elif "[Template:" not in current_desc:
+                self.description_edit.setPlainText(current_desc + template_info)
+    
     def _load_story_data(self) -> None:
         """Load existing story data into the form."""
         if not self.story:
@@ -113,6 +191,11 @@ class StoryDialog(QDialog):
         
         self.title_edit.setText(self.story.title or "")
         self.subtitle_edit.setText(self.story.subtitle or "")
+        
+        # Load genre from meta field
+        if self.story.meta and 'genre' in self.story.meta:
+            self.genre_edit.setText(self.story.meta['genre'])
+        
         self.description_edit.setPlainText(self.story.description or "")
         self.is_fiction_checkbox.setChecked(self.story.is_fiction)
         
@@ -146,6 +229,16 @@ class StoryDialog(QDialog):
             "word_count_target": self.target_words.value() if self.target_words.value() > 0 else None,
             "exclude_from_ai": self.exclude_ai_checkbox.isChecked(),
         }
+        
+        # Add genre to meta field
+        genre = self.genre_edit.currentText().strip()
+        if genre:
+            if self.is_editing and self.story.meta:
+                meta = self.story.meta.copy()
+            else:
+                meta = {}
+            meta['genre'] = genre
+            data['meta'] = meta
         
         try:
             if self.is_editing:

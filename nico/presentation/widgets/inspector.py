@@ -22,7 +22,13 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 
-from nico.domain.models import Scene, Project, Story, Chapter, Character
+from nico.domain.models import (
+    Scene, Project, Story, Chapter, Character,
+    Relationship, CharacterMotifRelationship, SymbolicMotif, Media,
+)
+from nico.application.context import AppContext
+from nico.presentation.widgets.relationship_dialog import RelationshipDialog
+from nico.presentation.widgets.media_picker_dialog import MediaPickerDialog
 
 
 class TraitItem(QWidget):
@@ -79,8 +85,9 @@ class TraitItem(QWidget):
 class InspectorWidget(QWidget):
     """Right panel: Properties and metadata for selected item."""
     
-    def __init__(self) -> None:
+    def __init__(self, app_context: AppContext) -> None:
         super().__init__()
+        self.app_context = app_context
         self.current_context = None
         self.current_context_type = None
         self._setup_ui()
@@ -144,11 +151,33 @@ class InspectorWidget(QWidget):
         notes_group = QGroupBox("Project Notes")
         notes_layout = QVBoxLayout()
         self.project_notes_text = QTextEdit()
+        self.project_notes_text.setAcceptRichText(False)
         self.project_notes_text.setPlaceholderText("Project notes, ideas, research...")
         self.project_notes_text.setMinimumHeight(150)
         notes_layout.addWidget(self.project_notes_text)
         notes_group.setLayout(notes_layout)
         layout.addWidget(notes_group)
+        
+        # Media group
+        project_media_group = QGroupBox("Media")
+        project_media_layout = QVBoxLayout()
+        
+        self.project_media_list = QListWidget()
+        self.project_media_list.setMaximumHeight(120)
+        project_media_layout.addWidget(self.project_media_list)
+        
+        project_media_btn_layout = QHBoxLayout()
+        project_attach_media_btn = QPushButton("📎 Attach")
+        project_attach_media_btn.clicked.connect(lambda: self._on_attach_media_generic('project'))
+        project_media_btn_layout.addWidget(project_attach_media_btn)
+        
+        project_detach_media_btn = QPushButton("✂️ Detach")
+        project_detach_media_btn.clicked.connect(lambda: self._on_detach_media_generic('project'))
+        project_media_btn_layout.addWidget(project_detach_media_btn)
+        
+        project_media_layout.addLayout(project_media_btn_layout)
+        project_media_group.setLayout(project_media_layout)
+        layout.addWidget(project_media_group)
         
         # Statistics group
         stats_group = QGroupBox("Statistics")
@@ -189,6 +218,7 @@ class InspectorWidget(QWidget):
         summary_group = QGroupBox("Story Summary")
         summary_layout = QVBoxLayout()
         self.story_summary_text = QTextEdit()
+        self.story_summary_text.setAcceptRichText(False)
         self.story_summary_text.setPlaceholderText("Story synopsis...")
         self.story_summary_text.setMinimumHeight(100)
         summary_layout.addWidget(self.story_summary_text)
@@ -199,11 +229,33 @@ class InspectorWidget(QWidget):
         notes_group = QGroupBox("Story Notes")
         notes_layout = QVBoxLayout()
         self.story_notes_text = QTextEdit()
+        self.story_notes_text.setAcceptRichText(False)
         self.story_notes_text.setPlaceholderText("Research notes, plot points...")
         self.story_notes_text.setMinimumHeight(150)
         notes_layout.addWidget(self.story_notes_text)
         notes_group.setLayout(notes_layout)
         layout.addWidget(notes_group)
+        
+        # Media group
+        story_media_group = QGroupBox("Media")
+        story_media_layout = QVBoxLayout()
+        
+        self.story_media_list = QListWidget()
+        self.story_media_list.setMaximumHeight(120)
+        story_media_layout.addWidget(self.story_media_list)
+        
+        story_media_btn_layout = QHBoxLayout()
+        story_attach_media_btn = QPushButton("📎 Attach")
+        story_attach_media_btn.clicked.connect(lambda: self._on_attach_media_generic('story'))
+        story_media_btn_layout.addWidget(story_attach_media_btn)
+        
+        story_detach_media_btn = QPushButton("✂️ Detach")
+        story_detach_media_btn.clicked.connect(lambda: self._on_detach_media_generic('story'))
+        story_media_btn_layout.addWidget(story_detach_media_btn)
+        
+        story_media_layout.addLayout(story_media_btn_layout)
+        story_media_group.setLayout(story_media_layout)
+        layout.addWidget(story_media_group)
         
         # Statistics group
         stats_group = QGroupBox("Statistics")
@@ -242,6 +294,7 @@ class InspectorWidget(QWidget):
         summary_group = QGroupBox("Chapter Summary")
         summary_layout = QVBoxLayout()
         self.chapter_summary_text = QTextEdit()
+        self.chapter_summary_text.setAcceptRichText(False)
         self.chapter_summary_text.setPlaceholderText("Chapter summary...")
         self.chapter_summary_text.setMinimumHeight(100)
         summary_layout.addWidget(self.chapter_summary_text)
@@ -252,11 +305,33 @@ class InspectorWidget(QWidget):
         notes_group = QGroupBox("Chapter Notes")
         notes_layout = QVBoxLayout()
         self.chapter_notes_text = QTextEdit()
+        self.chapter_notes_text.setAcceptRichText(False)
         self.chapter_notes_text.setPlaceholderText("Plot points, reminders...")
         self.chapter_notes_text.setMinimumHeight(150)
         notes_layout.addWidget(self.chapter_notes_text)
         notes_group.setLayout(notes_layout)
         layout.addWidget(notes_group)
+        
+        # Media group
+        chapter_media_group = QGroupBox("Media")
+        chapter_media_layout = QVBoxLayout()
+        
+        self.chapter_media_list = QListWidget()
+        self.chapter_media_list.setMaximumHeight(120)
+        chapter_media_layout.addWidget(self.chapter_media_list)
+        
+        chapter_media_btn_layout = QHBoxLayout()
+        chapter_attach_media_btn = QPushButton("📎 Attach")
+        chapter_attach_media_btn.clicked.connect(lambda: self._on_attach_media_generic('chapter'))
+        chapter_media_btn_layout.addWidget(chapter_attach_media_btn)
+        
+        chapter_detach_media_btn = QPushButton("✂️ Detach")
+        chapter_detach_media_btn.clicked.connect(lambda: self._on_detach_media_generic('chapter'))
+        chapter_media_btn_layout.addWidget(chapter_detach_media_btn)
+        
+        chapter_media_layout.addLayout(chapter_media_btn_layout)
+        chapter_media_group.setLayout(chapter_media_layout)
+        layout.addWidget(chapter_media_group)
         
         # Statistics group
         stats_group = QGroupBox("Statistics")
@@ -316,17 +391,53 @@ class InspectorWidget(QWidget):
         self.relationships_list.setMaximumHeight(150)
         relationships_layout.addWidget(self.relationships_list)
         
-        add_relationship_btn = QPushButton("➕ Add Relationship")
+        # Buttons for relationship management
+        btn_layout = QHBoxLayout()
+        add_relationship_btn = QPushButton("➕ Add")
         add_relationship_btn.clicked.connect(self._on_add_relationship)
-        relationships_layout.addWidget(add_relationship_btn)
+        btn_layout.addWidget(add_relationship_btn)
+        
+        edit_relationship_btn = QPushButton("✏️ Edit")
+        edit_relationship_btn.clicked.connect(self._on_edit_relationship)
+        btn_layout.addWidget(edit_relationship_btn)
+        
+        delete_relationship_btn = QPushButton("🗑️ Delete")
+        delete_relationship_btn.clicked.connect(self._on_delete_relationship)
+        btn_layout.addWidget(delete_relationship_btn)
+        
+        relationships_layout.addLayout(btn_layout)
         
         relationships_group.setLayout(relationships_layout)
         layout.addWidget(relationships_group)
+        
+        # Media group
+        media_group = QGroupBox("Media")
+        media_layout = QVBoxLayout()
+        
+        self.media_list = QListWidget()
+        self.media_list.setMaximumHeight(150)
+        media_layout.addWidget(self.media_list)
+        
+        # Buttons for media management
+        media_btn_layout = QHBoxLayout()
+        attach_media_btn = QPushButton("📎 Attach")
+        attach_media_btn.clicked.connect(self._on_attach_media)
+        media_btn_layout.addWidget(attach_media_btn)
+        
+        detach_media_btn = QPushButton("✂️ Detach")
+        detach_media_btn.clicked.connect(self._on_detach_media)
+        media_btn_layout.addWidget(detach_media_btn)
+        
+        media_layout.addLayout(media_btn_layout)
+        
+        media_group.setLayout(media_layout)
+        layout.addWidget(media_group)
         
         # Notes group
         notes_group = QGroupBox("Character Notes")
         notes_layout = QVBoxLayout()
         self.character_notes_text = QTextEdit()
+        self.character_notes_text.setAcceptRichText(False)
         self.character_notes_text.setPlaceholderText("Character development notes...")
         self.character_notes_text.setMinimumHeight(100)
         notes_layout.addWidget(self.character_notes_text)
@@ -382,6 +493,7 @@ class InspectorWidget(QWidget):
         summary_layout = QVBoxLayout()
         
         self.scene_summary_text = QTextEdit()
+        self.scene_summary_text.setAcceptRichText(False)
         self.scene_summary_text.setPlaceholderText("Brief summary of this scene...")
         self.scene_summary_text.setMaximumHeight(100)
         
@@ -394,12 +506,34 @@ class InspectorWidget(QWidget):
         notes_layout = QVBoxLayout()
         
         self.scene_notes_text = QTextEdit()
+        self.scene_notes_text.setAcceptRichText(False)
         self.scene_notes_text.setPlaceholderText("Research notes, ideas, reminders...")
         self.scene_notes_text.setMaximumHeight(150)
         
         notes_layout.addWidget(self.scene_notes_text)
         notes_group.setLayout(notes_layout)
         layout.addWidget(notes_group)
+        
+        # Media group
+        scene_media_group = QGroupBox("Media")
+        scene_media_layout = QVBoxLayout()
+        
+        self.scene_media_list = QListWidget()
+        self.scene_media_list.setMaximumHeight(120)
+        scene_media_layout.addWidget(self.scene_media_list)
+        
+        scene_media_btn_layout = QHBoxLayout()
+        scene_attach_media_btn = QPushButton("📎 Attach")
+        scene_attach_media_btn.clicked.connect(lambda: self._on_attach_media_generic('scene'))
+        scene_media_btn_layout.addWidget(scene_attach_media_btn)
+        
+        scene_detach_media_btn = QPushButton("✂️ Detach")
+        scene_detach_media_btn.clicked.connect(lambda: self._on_detach_media_generic('scene'))
+        scene_media_btn_layout.addWidget(scene_detach_media_btn)
+        
+        scene_media_layout.addLayout(scene_media_btn_layout)
+        scene_media_group.setLayout(scene_media_layout)
+        layout.addWidget(scene_media_group)
         
         # Statistics group
         stats_group = QGroupBox("Statistics")
@@ -443,6 +577,20 @@ class InspectorWidget(QWidget):
         else:
             self.project_notes_text.clear()
         
+        # Load media attachments
+        self.project_media_list.clear()
+        try:
+            media_items = self.app_context.media_service.get_entity_media('project', project.id)
+            for media in media_items:
+                icon_map = {"image": "🖼️", "audio": "🎵", "video": "🎬"}
+                icon = icon_map.get(media.media_type, "📄")
+                display_text = f"{icon} {media.get_display_title()}"
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.ItemDataRole.UserRole, media.id)
+                self.project_media_list.addItem(item)
+        except Exception as e:
+            print(f"Failed to load project media: {e}")
+        
         # TODO: Load statistics (requires queries)
         self.project_stories_label.setText("0")
         self.project_chapters_label.setText("0")
@@ -464,6 +612,20 @@ class InspectorWidget(QWidget):
             self.story_summary_text.clear()
             self.story_notes_text.clear()
         
+        # Load media attachments
+        self.story_media_list.clear()
+        try:
+            media_items = self.app_context.media_service.get_entity_media('story', story.id)
+            for media in media_items:
+                icon_map = {"image": "🖼️", "audio": "🎵", "video": "🎬"}
+                icon = icon_map.get(media.media_type, "📄")
+                display_text = f"{icon} {media.get_display_title()}"
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.ItemDataRole.UserRole, media.id)
+                self.story_media_list.addItem(item)
+        except Exception as e:
+            print(f"Failed to load story media: {e}")
+        
         # TODO: Load statistics
         self.story_chapters_label.setText("0")
         self.story_scenes_label.setText("0")
@@ -484,6 +646,20 @@ class InspectorWidget(QWidget):
             self.chapter_summary_text.clear()
             self.chapter_notes_text.clear()
         
+        # Load media attachments
+        self.chapter_media_list.clear()
+        try:
+            media_items = self.app_context.media_service.get_entity_media('chapter', chapter.id)
+            for media in media_items:
+                icon_map = {"image": "🖼️", "audio": "🎵", "video": "🎬"}
+                icon = icon_map.get(media.media_type, "📄")
+                display_text = f"{icon} {media.get_display_title()}"
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.ItemDataRole.UserRole, media.id)
+                self.chapter_media_list.addItem(item)
+        except Exception as e:
+            print(f"Failed to load chapter media: {e}")
+        
         # TODO: Load statistics
         self.chapter_scenes_label.setText("0")
         self.chapter_words_label.setText("0")
@@ -503,11 +679,68 @@ class InspectorWidget(QWidget):
             for trait_name, value in character.meta['traits'].items():
                 self._add_trait_widget(trait_name, value)
         
-        # Load relationships
+        # Load relationships from database
         self.relationships_list.clear()
-        if character.meta and 'relationships' in character.meta:
-            for rel in character.meta['relationships']:
-                self.relationships_list.addItem(rel)
+        
+        try:
+            # Load interpersonal relationships using service
+            interpersonal_rels = self.app_context.relationship_service.get_character_relationships(character.id)
+            
+            for rel in interpersonal_rels:
+                # Determine which character is the "other"
+                other_id = rel.character_b_id if rel.character_a_id == character.id else rel.character_a_id
+                other_char = self.app_context._session.query(Character).filter(
+                    Character.id == other_id
+                ).first()
+                
+                if other_char:
+                    other_name = other_char.nickname or other_char.first_name or f"Character {other_char.id}"
+                    display_text = f"{rel.relationship_type}: {other_name}"
+                    item = QListWidgetItem(display_text)
+                    # Store relationship data for editing/deletion
+                    item.setData(Qt.ItemDataRole.UserRole, {'type': 'interpersonal', 'id': rel.id})
+                    self.relationships_list.addItem(item)
+            
+            # Load symbolic/motif relationships
+            motif_rels = self.app_context._session.query(CharacterMotifRelationship).filter(
+                CharacterMotifRelationship.character_id == character.id
+            ).all()
+            
+            for motif_rel in motif_rels:
+                motif = self.app_context._session.query(SymbolicMotif).filter(
+                    SymbolicMotif.id == motif_rel.motif_id
+                ).first()
+                
+                if motif:
+                    display_text = f"🔮 {motif.name}"
+                    item = QListWidgetItem(display_text)
+                    # Store relationship data for editing/deletion
+                    item.setData(Qt.ItemDataRole.UserRole, {'type': 'symbolic', 'id': motif_rel.id})
+                    self.relationships_list.addItem(item)
+        
+        except Exception as e:
+            # Fall back to meta if database query fails
+            if character.meta and 'relationships' in character.meta:
+                for rel in character.meta['relationships']:
+                    self.relationships_list.addItem(rel)
+        
+        # Load media attachments
+        self.media_list.clear()
+        try:
+            media_items = self.app_context.media_service.get_entity_media('character', character.id)
+            for media in media_items:
+                icon_map = {
+                    "image": "🖼️",
+                    "audio": "🎵",
+                    "video": "🎬",
+                }
+                icon = icon_map.get(media.media_type, "📄")
+                display_text = f"{icon} {media.get_display_title()}"
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.ItemDataRole.UserRole, media.id)
+                self.media_list.addItem(item)
+        except Exception as e:
+            print(f"Failed to load media: {e}")
         
         # Load notes
         if character.meta:
@@ -540,6 +773,20 @@ class InspectorWidget(QWidget):
         
         # Update statistics
         self.word_count_label.setText(f"{scene.word_count:,}")
+        
+        # Load media attachments
+        self.scene_media_list.clear()
+        try:
+            media_items = self.app_context.media_service.get_entity_media('scene', scene.id)
+            for media in media_items:
+                icon_map = {"image": "🖼️", "audio": "🎵", "video": "🎬"}
+                icon = icon_map.get(media.media_type, "📄")
+                display_text = f"{icon} {media.get_display_title()}"
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.ItemDataRole.UserRole, media.id)
+                self.scene_media_list.addItem(item)
+        except Exception as e:
+            print(f"Failed to load scene media: {e}")
         
         # Format dates
         if scene.created_at:
@@ -630,23 +877,404 @@ class InspectorWidget(QWidget):
         if not isinstance(self.current_context, Character):
             return
         
-        relationship, ok = QInputDialog.getText(
-            self,
-            "Add Relationship",
-            "Describe relationship (e.g., 'Sister of John', 'Enemy of the King'):"
+        character = self.current_context
+        
+        # Get project to access other characters and motifs
+        project = self.app_context.project_service.get_project(character.project_id)
+        if not project:
+            return
+        
+        # Get available characters for interpersonal relationships
+        available_characters = self.app_context.character_service.list_characters(project.id)
+        
+        # Get available motifs for symbolic relationships  
+        # TODO: Add motif service when implemented
+        available_motifs = []
+        try:
+            from nico.infrastructure.database.repositories import SymbolicMotifRepository
+            motif_repo = SymbolicMotifRepository(self.app_context.db_session)
+            available_motifs = motif_repo.list_by_project(project.id)
+        except Exception:
+            pass  # Motif repository may not be implemented yet
+        
+        # Show relationship dialog
+        dialog = RelationshipDialog(
+            character=character,
+            project_id=project.id,
+            available_characters=available_characters,
+            available_motifs=available_motifs,
+            parent=self
         )
         
-        if ok and relationship.strip():
-            self.relationships_list.addItem(relationship.strip())
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            rel_data = dialog.get_relationship_data()
+            if not rel_data:
+                return
             
-            # Save to character meta
-            if not self.current_context.meta:
-                self.current_context.meta = {}
-            if 'relationships' not in self.current_context.meta:
-                self.current_context.meta['relationships'] = []
-            self.current_context.meta['relationships'].append(relationship.strip())
+            try:
+                if rel_data['type'] == 'interpersonal':
+                    # Create character-to-character relationship using service
+                    relationship = self.app_context.relationship_service.create_relationship(
+                        project_id=project.id,
+                        character_a_id=rel_data['character_a_id'],
+                        character_b_id=rel_data['character_b_id'],
+                        relationship_type=rel_data['relationship_type'],
+                        description=rel_data.get('description'),
+                        attributes=rel_data.get('attributes'),
+                        status=rel_data.get('status'),
+                        began_at=rel_data.get('began_at'),
+                    )
+                    
+                    # Display in list
+                    other_char = next(
+                        (c for c in available_characters if c.id == rel_data['character_b_id']),
+                        None
+                    )
+                    if other_char:
+                        other_name = other_char.nickname or other_char.first_name or f"Character {other_char.id}"
+                        display_text = f"{rel_data['relationship_type']}: {other_name}"
+                        item = QListWidgetItem(display_text)
+                        item.setData(Qt.ItemDataRole.UserRole, {'type': 'interpersonal', 'id': relationship.id})
+                        self.relationships_list.addItem(item)
+                
+                elif rel_data['type'] == 'symbolic':
+                    # Create character-to-motif relationship
+                    # Access the internal session for now (until we have a symbolic service)
+                    char_motif_rel = CharacterMotifRelationship(
+                        character_id=rel_data['character_id'],
+                        motif_id=rel_data['motif_id'],
+                        description=rel_data.get('description'),
+                        attributes=rel_data.get('attributes'),
+                    )
+                    self.app_context._session.add(char_motif_rel)
+                    self.app_context._session.commit()
+                    
+                    # Display in list
+                    motif = next(
+                        (m for m in available_motifs if m.id == rel_data['motif_id']),
+                        None
+                    )
+                    if motif:
+                        display_text = f"🔮 {motif.name}"
+                        item = QListWidgetItem(display_text)
+                        item.setData(Qt.ItemDataRole.UserRole, {'type': 'symbolic', 'id': char_motif_rel.id})
+                        self.relationships_list.addItem(item)
+                
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Error Creating Relationship",
+                    f"Failed to create relationship: {str(e)}"
+                )
+    
+    def _on_edit_relationship(self):
+        """Edit selected relationship."""
+        if not isinstance(self.current_context, Character):
+            return
+        
+        current_item = self.relationships_list.currentItem()
+        if not current_item:
+            QMessageBox.information(self, "No Selection", "Please select a relationship to edit.")
+            return
+        
+        rel_metadata = current_item.data(Qt.ItemDataRole.UserRole)
+        if not rel_metadata:
+            return
+        
+        character = self.current_context
+        project = self.app_context.project_service.get_project(character.project_id)
+        if not project:
+            return
+        
+        # Load the relationship to edit
+        edit_relationship = None
+        if rel_metadata['type'] == 'interpersonal':
+            edit_relationship = self.app_context.relationship_service.get_relationship(rel_metadata['id'])
+        elif rel_metadata['type'] == 'symbolic':
+            edit_relationship = self.app_context._session.query(CharacterMotifRelationship).filter(
+                CharacterMotifRelationship.id == rel_metadata['id']
+            ).first()
+        
+        if not edit_relationship:
+            QMessageBox.warning(self, "Not Found", "Could not find relationship to edit.")
+            return
+        
+        # Get available characters and motifs
+        available_characters = self.app_context.character_service.list_characters(project.id)
+        available_motifs = []
+        try:
+            from nico.infrastructure.database.repositories import SymbolicMotifRepository
+            motif_repo = SymbolicMotifRepository(self.app_context._session)
+            available_motifs = motif_repo.list_by_project(project.id)
+        except Exception:
+            pass
+        
+        # Show dialog with existing data
+        dialog = RelationshipDialog(
+            character=character,
+            project_id=project.id,
+            available_characters=available_characters,
+            available_motifs=available_motifs,
+            edit_relationship=edit_relationship,
+            parent=self
+        )
+        
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            rel_data = dialog.get_relationship_data()
+            if not rel_data or not rel_data.get('id'):
+                return
             
-            # TODO: Save to database
+            try:
+                if rel_data['type'] == 'interpersonal':
+                    # Update interpersonal relationship
+                    relationship = self.app_context.relationship_service.get_relationship(rel_data['id'])
+                    if relationship:
+                        relationship.relationship_type = rel_data['relationship_type']
+                        relationship.description = rel_data.get('description')
+                        relationship.attributes = rel_data.get('attributes')
+                        relationship.status = rel_data.get('status')
+                        relationship.began_at = rel_data.get('began_at')
+                        self.app_context._session.commit()
+                        
+                        # Update display
+                        other_char = next(
+                            (c for c in available_characters if c.id == rel_data['character_b_id']),
+                            None
+                        )
+                        if other_char:
+                            other_name = other_char.nickname or other_char.first_name or f"Character {other_char.id}"
+                            current_item.setText(f"{rel_data['relationship_type']}: {other_name}")
+                
+                elif rel_data['type'] == 'symbolic':
+                    # Update symbolic relationship
+                    char_motif_rel = self.app_context._session.query(CharacterMotifRelationship).filter(
+                        CharacterMotifRelationship.id == rel_data['id']
+                    ).first()
+                    if char_motif_rel:
+                        char_motif_rel.description = rel_data.get('description')
+                        char_motif_rel.attributes = rel_data.get('attributes')
+                        self.app_context._session.commit()
+                        
+                        # Update display (motif shouldn't change, but attributes might)
+                        motif = next(
+                            (m for m in available_motifs if m.id == rel_data['motif_id']),
+                            None
+                        )
+                        if motif:
+                            current_item.setText(f"🔮 {motif.name}")
+                
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Error Updating Relationship",
+                    f"Failed to update relationship: {str(e)}"
+                )
+    
+    def _on_delete_relationship(self):
+        """Delete selected relationship."""
+        if not isinstance(self.current_context, Character):
+            return
+        
+        current_item = self.relationships_list.currentItem()
+        if not current_item:
+            QMessageBox.information(self, "No Selection", "Please select a relationship to delete.")
+            return
+        
+        rel_metadata = current_item.data(Qt.ItemDataRole.UserRole)
+        if not rel_metadata:
+            return
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Confirm Deletion",
+            f"Are you sure you want to delete this relationship?\n\n{current_item.text()}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                if rel_metadata['type'] == 'interpersonal':
+                    # Delete via service
+                    relationship = self.app_context.relationship_service.get_relationship(rel_metadata['id'])
+                    if relationship:
+                        self.app_context._session.delete(relationship)
+                        self.app_context._session.commit()
+                        
+                elif rel_metadata['type'] == 'symbolic':
+                    # Delete symbolic relationship
+                    char_motif_rel = self.app_context._session.query(CharacterMotifRelationship).filter(
+                        CharacterMotifRelationship.id == rel_metadata['id']
+                    ).first()
+                    if char_motif_rel:
+                        self.app_context._session.delete(char_motif_rel)
+                        self.app_context._session.commit()
+                
+                # Remove from list
+                row = self.relationships_list.row(current_item)
+                self.relationships_list.takeItem(row)
+                
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Error Deleting Relationship",
+                    f"Failed to delete relationship: {str(e)}"
+                )
+    
+    def _on_attach_media(self):
+        """Attach media to the current entity."""
+        if not isinstance(self.current_context, Character):
+            return
+        
+        character = self.current_context
+        
+        dialog = MediaPickerDialog(
+            project_id=character.project_id,
+            app_context=self.app_context,
+            entity_type='character',
+            entity_id=character.id,
+            parent=self
+        )
+        
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            # Reload character to refresh media list
+            self.load_character(character)
+    
+    def _on_detach_media(self):
+        """Detach selected media from the current entity."""
+        if not isinstance(self.current_context, Character):
+            return
+        
+        current_item = self.media_list.currentItem()
+        if not current_item:
+            QMessageBox.information(self, "No Selection", "Please select media to detach.")
+            return
+        
+        reply = QMessageBox.question(
+            self,
+            "Confirm Detachment",
+            f"Are you sure you want to detach this media?\n\n{current_item.text()}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                media_id = current_item.data(Qt.ItemDataRole.UserRole)
+                
+                # Find and delete the attachment
+                from nico.domain.models import MediaAttachment
+                attachment = self.app_context._session.query(MediaAttachment).filter(
+                    MediaAttachment.media_id == media_id,
+                    MediaAttachment.entity_type == 'character',
+                    MediaAttachment.entity_id == self.current_context.id
+                ).first()
+                
+                if attachment:
+                    self.app_context.media_service.detach_media_from_entity(attachment.id)
+                    
+                    # Remove from list
+                    row = self.media_list.row(current_item)
+                    self.media_list.takeItem(row)
+                    
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Error Detaching Media",
+                    f"Failed to detach media: {str(e)}"
+                )
+    
+    def _on_attach_media_generic(self, entity_type: str):
+        """Attach media to the current entity (generic handler for all entity types)."""
+        if not self.current_context:
+            return
+        
+        # Map entity type to attribute name for project_id
+        project_id = None
+        if hasattr(self.current_context, 'project_id'):
+            project_id = self.current_context.project_id
+        elif hasattr(self.current_context, 'id') and entity_type == 'project':
+            project_id = self.current_context.id
+        
+        if not project_id:
+            QMessageBox.warning(self, "Error", "Cannot determine project for media attachment.")
+            return
+        
+        dialog = MediaPickerDialog(
+            project_id=project_id,
+            app_context=self.app_context,
+            entity_type=entity_type,
+            entity_id=self.current_context.id,
+            parent=self
+        )
+        
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            # Reload the current entity to refresh media list
+            if entity_type == 'project':
+                self.load_project(self.current_context)
+            elif entity_type == 'story':
+                self.load_story(self.current_context)
+            elif entity_type == 'chapter':
+                self.load_chapter(self.current_context)
+            elif entity_type == 'scene':
+                self.load_scene(self.current_context)
+    
+    def _on_detach_media_generic(self, entity_type: str):
+        """Detach selected media from the current entity (generic handler for all entity types)."""
+        if not self.current_context:
+            return
+        
+        # Get the appropriate media list widget
+        media_list_map = {
+            'project': self.project_media_list,
+            'story': self.story_media_list,
+            'chapter': self.chapter_media_list,
+            'scene': self.scene_media_list,
+        }
+        
+        media_list = media_list_map.get(entity_type)
+        if not media_list:
+            return
+        
+        current_item = media_list.currentItem()
+        if not current_item:
+            QMessageBox.information(self, "No Selection", "Please select media to detach.")
+            return
+        
+        reply = QMessageBox.question(
+            self,
+            "Confirm Detachment",
+            f"Are you sure you want to detach this media?\n\n{current_item.text()}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                media_id = current_item.data(Qt.ItemDataRole.UserRole)
+                
+                # Find and delete the attachment
+                from nico.domain.models import MediaAttachment
+                attachment = self.app_context._session.query(MediaAttachment).filter(
+                    MediaAttachment.media_id == media_id,
+                    MediaAttachment.entity_type == entity_type,
+                    MediaAttachment.entity_id == self.current_context.id
+                ).first()
+                
+                if attachment:
+                    self.app_context.media_service.detach_media_from_entity(attachment.id)
+                    
+                    # Remove from list
+                    row = media_list.row(current_item)
+                    media_list.takeItem(row)
+                    
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Error Detaching Media",
+                    f"Failed to detach media: {str(e)}"
+                )
     
     def clear(self) -> None:
         """Clear all inspector fields and show empty state."""

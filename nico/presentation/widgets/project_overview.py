@@ -175,11 +175,16 @@ class ProjectOverview(QWidget):
         characters_group = QGroupBox("Characters in this Project")
         characters_layout = QVBoxLayout()
         
-        # Create character button
+        # Create/edit character buttons
         create_char_btn_layout = QHBoxLayout()
         self.create_character_btn = QPushButton("➕ New Character")
         self.create_character_btn.clicked.connect(self._on_create_character)
         create_char_btn_layout.addWidget(self.create_character_btn)
+        
+        self.edit_character_btn = QPushButton("✏️ Edit Character")
+        self.edit_character_btn.clicked.connect(self._on_edit_character_clicked)
+        create_char_btn_layout.addWidget(self.edit_character_btn)
+        
         create_char_btn_layout.addStretch()
         characters_layout.addLayout(create_char_btn_layout)
         
@@ -196,11 +201,16 @@ class ProjectOverview(QWidget):
         locations_group = QGroupBox("Locations in this Project")
         locations_layout = QVBoxLayout()
         
-        # Create location button
+        # Create/edit location buttons
         create_loc_btn_layout = QHBoxLayout()
         self.create_location_btn = QPushButton("➕ New Location")
         self.create_location_btn.clicked.connect(self._on_create_location)
         create_loc_btn_layout.addWidget(self.create_location_btn)
+        
+        self.edit_location_btn = QPushButton("✏️ Edit Location")
+        self.edit_location_btn.clicked.connect(self._on_edit_location_clicked)
+        create_loc_btn_layout.addWidget(self.edit_location_btn)
+        
         create_loc_btn_layout.addStretch()
         locations_layout.addLayout(create_loc_btn_layout)
         
@@ -217,11 +227,16 @@ class ProjectOverview(QWidget):
         events_group = QGroupBox("Events in this Project")
         events_layout = QVBoxLayout()
         
-        # Create event button
+        # Create/edit event buttons
         create_event_btn_layout = QHBoxLayout()
         self.create_event_btn = QPushButton("➕ New Event")
         self.create_event_btn.clicked.connect(self._on_create_event)
         create_event_btn_layout.addWidget(self.create_event_btn)
+        
+        self.edit_event_btn = QPushButton("✏️ Edit Event")
+        self.edit_event_btn.clicked.connect(self._on_edit_event_clicked)
+        create_event_btn_layout.addWidget(self.edit_event_btn)
+        
         create_event_btn_layout.addStretch()
         events_layout.addLayout(create_event_btn_layout)
         
@@ -370,6 +385,14 @@ class ProjectOverview(QWidget):
             if dialog.exec():
                 self._load_characters()
     
+    def _on_edit_character_clicked(self) -> None:
+        """Handle edit character button click."""
+        current_item = self.characters_list.currentItem()
+        if current_item:
+            character_id = current_item.data(Qt.ItemDataRole.UserRole)
+            if character_id:
+                self._on_character_double_clicked(current_item)
+    
     def _on_create_location(self) -> None:
         """Handle create location button click."""
         if not self.current_project:
@@ -391,6 +414,14 @@ class ProjectOverview(QWidget):
             if dialog.exec():
                 self._load_locations()
     
+    def _on_edit_location_clicked(self) -> None:
+        """Handle edit location button click."""
+        current_item = self.locations_list.currentItem()
+        if current_item:
+            location_id = current_item.data(Qt.ItemDataRole.UserRole)
+            if location_id:
+                self._on_location_double_clicked(current_item)
+    
     def _on_create_event(self) -> None:
         """Handle create event button click."""
         if not self.current_project:
@@ -411,6 +442,14 @@ class ProjectOverview(QWidget):
             dialog = EventDialog(self.current_project.id, event, parent=self)
             if dialog.exec():
                 self._load_events()
+    
+    def _on_edit_event_clicked(self) -> None:
+        """Handle edit event button click."""
+        current_item = self.events_list.currentItem()
+        if current_item:
+            event_id = current_item.data(Qt.ItemDataRole.UserRole)
+            if event_id:
+                self._on_event_double_clicked(current_item)
     
     def _on_story_double_clicked(self, item: QListWidgetItem) -> None:
         """Handle double-click on a story."""

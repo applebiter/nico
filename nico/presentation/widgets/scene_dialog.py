@@ -56,6 +56,7 @@ class SceneDialog(QDialog):
         
         # Summary (optional)
         self.summary_edit = QTextEdit()
+        self.summary_edit.setAcceptRichText(False)
         self.summary_edit.setPlaceholderText("Brief summary of what happens in this scene...")
         self.summary_edit.setMaximumHeight(100)
         form.addRow("Summary:", self.summary_edit)
