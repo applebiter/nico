@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QMessageBox,
+    QMenu,
+    QToolButton,
 )
 
 from nico.domain.models import Project
@@ -21,13 +23,20 @@ from nico.application.context import get_app_context
 from nico.presentation.widgets.character_dialog import CharacterDialog
 from nico.presentation.widgets.location_dialog import LocationDialog
 from nico.presentation.widgets.event_dialog import EventDialog
+from nico.presentation.widgets.story_dialog import StoryDialog
 
 
 class ProjectOverview(QWidget):
     """Landing page displayed when a project is selected in the binder."""
     
+    # Signal emitted when user wants to edit the project
+    project_edit_requested = Signal()
+    # Signal emitted when project is deleted
+    project_deleted = Signal()
     # Signal emitted when user wants to create a new story
     create_story_requested = Signal()
+    # Signal emitted when user wants to edit a story
+    story_edit_requested = Signal(int)  # story_id
     # Signal emitted when user clicks on a story in the list
     story_selected = Signal(int)  # story_id
     
@@ -52,9 +61,23 @@ class ProjectOverview(QWidget):
         
         # Header
         header = QVBoxLayout()
+        
+        # Title row with edit and delete buttons
+        title_row = QHBoxLayout()
         self.title_label = QLabel("Project")
         self.title_label.setStyleSheet("font-size: 24px; font-weight: bold;")
-        header.addWidget(self.title_label)
+        title_row.addWidget(self.title_label)
+        title_row.addStretch()
+        
+        self.edit_btn = QPushButton("✏️ Edit Project")
+        self.edit_btn.clicked.connect(self._on_edit_project)
+        title_row.addWidget(self.edit_btn)
+        
+        self.delete_btn = QPushButton("🗑️ Delete Project")
+        self.delete_btn.clicked.connect(self._on_delete_project)
+        title_row.addWidget(self.delete_btn)
+        
+        header.addLayout(title_row)
         
         self.description_label = QLabel("")
         self.description_label.setWordWrap(True)
@@ -104,18 +127,46 @@ class ProjectOverview(QWidget):
         stories_group = QGroupBox("Stories in this Project")
         stories_layout = QVBoxLayout()
         
-        # Create story button
+        # Create/edit story buttons
         create_btn_layout = QHBoxLayout()
         self.create_story_btn = QPushButton("➕ New Story")
-        self.create_story_btn.clicked.connect(self.create_story_requested.emit)
+        self.create_story_btn.clicked.connect(self._on_create_story)
         create_btn_layout.addWidget(self.create_story_btn)
+        
+        self.edit_story_btn = QPushButton("✏️ Edit Story")
+        self.edit_story_btn.clicked.connect(self._on_edit_story_clicked)
+        create_btn_layout.addWidget(self.edit_story_btn)
+        
         create_btn_layout.addStretch()
         stories_layout.addLayout(create_btn_layout)
         
-        # Stories list
+        # Stories list with reordering controls
+        list_layout = QHBoxLayout()
+        
         self.stories_list = QListWidget()
         self.stories_list.itemDoubleClicked.connect(self._on_story_double_clicked)
-        stories_layout.addWidget(self.stories_list)
+        self.stories_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.stories_list.customContextMenuRequested.connect(self._show_story_context_menu)
+        list_layout.addWidget(self.stories_list)
+        
+        # Reorder buttons
+        reorder_buttons = QVBoxLayout()
+        self.story_move_up_btn = QToolButton()
+        self.story_move_up_btn.setText("▲")
+        self.story_move_up_btn.setToolTip("Move story up")
+        self.story_move_up_btn.clicked.connect(self._move_story_up)
+        reorder_buttons.addWidget(self.story_move_up_btn)
+        
+        self.story_move_down_btn = QToolButton()
+        self.story_move_down_btn.setText("▼")
+        self.story_move_down_btn.setToolTip("Move story down")
+        self.story_move_down_btn.clicked.connect(self._move_story_down)
+        reorder_buttons.addWidget(self.story_move_down_btn)
+        
+        reorder_buttons.addStretch()
+        list_layout.addLayout(reorder_buttons)
+        
+        stories_layout.addLayout(list_layout)
         
         stories_group.setLayout(stories_layout)
         layout.addWidget(stories_group)
@@ -243,6 +294,7 @@ class ProjectOverview(QWidget):
                 f"   {chapter_count} chapters, {scene_count} scenes, {word_count:,} words"
             )
             item.setData(Qt.ItemDataRole.UserRole, story.id)
+            self.stories_list.addItem(item)
     
     def _load_characters(self) -> None:
         """Load characters for the current project."""
@@ -365,3 +417,103 @@ class ProjectOverview(QWidget):
         story_id = item.data(Qt.ItemDataRole.UserRole)
         if story_id:
             self.story_selected.emit(story_id)
+    
+    def _on_create_story(self) -> None:
+        """Handle create story button click."""
+        if not self.current_project:
+            return
+        
+        dialog = StoryDialog(self.current_project.id, parent=self)
+        if dialog.exec():
+            self.load_project(self.current_project)
+    
+    def _on_edit_project(self) -> None:
+        """Handle edit project button click."""
+        if self.current_project:
+            self.project_edit_requested.emit()
+    
+    def _on_delete_project(self) -> None:
+        """Delete the current project after confirmation."""
+        if not self.current_project:
+            return
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Delete Project",
+            f"Are you sure you want to delete '{self.current_project.title}'?\n\n"
+            f"This will permanently delete ALL stories, chapters, scenes, characters, "
+            f"locations, and events in this project.\n\n"
+            f"This action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Delete the project using session directly
+                if hasattr(self.app_context, '_session') and self.app_context._session:
+                    self.app_context._session.delete(self.current_project)
+                    self.app_context.commit()
+                    self.current_project = None
+                    self.project_deleted.emit()
+                    QMessageBox.information(
+                        self,
+                        "Project Deleted",
+                        "The project has been deleted."
+                    )
+            except Exception as e:
+                self.app_context.rollback()
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"An error occurred while deleting the project:\n{str(e)}"
+                )
+    
+    def _on_edit_story_clicked(self) -> None:
+        """Handle edit story button click."""
+        current_item = self.stories_list.currentItem()
+        if current_item:
+            story_id = current_item.data(Qt.ItemDataRole.UserRole)
+            if story_id:
+                self.story_edit_requested.emit(story_id)
+    
+    def _show_story_context_menu(self, position) -> None:
+        """Show context menu for story list."""
+        item = self.stories_list.itemAt(position)
+        if not item:
+            return
+        
+        story_id = item.data(Qt.ItemDataRole.UserRole)
+        if not story_id:
+            return
+        
+        menu = QMenu(self)
+        
+        edit_action = menu.addAction("✏️ Edit Story")
+        open_action = menu.addAction("📖 Open Story")
+        
+        action = menu.exec(self.stories_list.mapToGlobal(position))
+        
+        if action == edit_action:
+            self.story_edit_requested.emit(story_id)
+        elif action == open_action:
+            self.story_selected.emit(story_id)
+    
+    def _move_story_up(self) -> None:
+        """Move selected story up in the list."""
+        current_row = self.stories_list.currentRow()
+        if current_row > 0:
+            item = self.stories_list.takeItem(current_row)
+            self.stories_list.insertItem(current_row - 1, item)
+            self.stories_list.setCurrentRow(current_row - 1)
+            # TODO: Persist story order change to database
+    
+    def _move_story_down(self) -> None:
+        """Move selected story down in the list."""
+        current_row = self.stories_list.currentRow()
+        if current_row < self.stories_list.count() - 1:
+            item = self.stories_list.takeItem(current_row)
+            self.stories_list.insertItem(current_row + 1, item)
+            self.stories_list.setCurrentRow(current_row + 1)
+            # TODO: Persist story order change to database

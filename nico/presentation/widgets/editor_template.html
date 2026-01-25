@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scene Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Georgia', serif;
+            padding: 20px;
+        }
+        
+        body.light {
+            background: #ffffff;
+        }
+        
+        body.dark {
+            background: #1e1e1e;
+        }
+        
+        .editor-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        #editor {
+            outline: none;
+            min-height: 500px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 16px;
+            line-height: 1.8;
+            padding: 20px;
+            border: 1px solid #3e3e42;
+            border-radius: 2px;
+        }
+        
+        /* Light theme */
+        body.light #editor {
+            background-color: #ffffff;
+            color: #000000;
+            border-color: #d4d4d4;
+        }
+        
+        body.light #editor:empty:before {
+            color: #999999;
+        }
+        
+        /* Dark theme */
+        body.dark #editor {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border-color: #3e3e42;
+        }
+        
+        body.dark #editor:empty:before {
+            color: #6e6e6e;
+        }
+        
+        #editor:empty:before {
+            content: attr(data-placeholder);
+            pointer-events: none;
+        }
+        
+        #editor p {
+            margin-bottom: 1em;
+        }
+        
+        #editor h1 {
+            font-size: 2em;
+            font-weight: bold;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+        
+        #editor h2 {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+        
+        #editor h3 {
+            font-size: 1.17em;
+            font-weight: bold;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+        
+        #editor ul, #editor ol {
+            margin-left: 2em;
+            margin-bottom: 1em;
+        }
+        
+        #editor li {
+            margin-bottom: 0.5em;
+        }
+        
+        body.light #editor blockquote {
+            border-left: 4px solid #d4d4d4;
+            color: #666666;
+        }
+        
+        body.dark #editor blockquote {
+            border-left: 4px solid #3e3e42;
+            color: #999999;
+        }
+        
+        #editor blockquote {
+            padding-left: 1em;
+            margin-left: 0;
+            margin-bottom: 1em;
+            font-style: italic;
+        }
+        
+        #editor img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 1em 0;
+        }
+        
+        body.light #editor a {
+            color: #0078d4;
+        }
+        
+        body.dark #editor a {
+            color: #4daafc;
+        }
+        
+        #editor a {
+            text-decoration: underline;
+        }
+    </style>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+</head>
+<body>
+    <div class="editor-container">
+        <div id="editor" contenteditable="true" data-placeholder="Start writing your scene..."></div>
+    </div>
+    
+    <script>
+        let bridge = null;
+        let updateTimer = null;
+        const editorElement = document.getElementById('editor');
+        
+        // Initialize QWebChannel for Python communication
+        new QWebChannel(qt.webChannelTransport, function(channel) {
+            console.log('QWebChannel initialized');
+            bridge = channel.objects.bridge;
+            
+            // Notify Python that editor is ready
+            if (bridge) {
+                bridge.editorReady();
+            }
+            
+            // Focus the editor
+            editorElement.focus();
+        });
+        
+        // Listen for input events
+        editorElement.addEventListener('input', function() {
+            clearTimeout(updateTimer);
+            updateTimer = setTimeout(() => {
+                if (bridge) {
+                    const html = editorElement.innerHTML;
+                    const text = editorElement.innerText || editorElement.textContent;
+                    const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+                    
+                    bridge.contentChanged(html, html, wordCount);
+                }
+            }, 500);
+        });
+        
+        // Ensure clicking focuses the editor
+        editorElement.addEventListener('click', function() {
+            editorElement.focus();
+        });
+        
+        // Exposed functions for Python to call
+        function setTheme(theme) {
+            document.body.className = theme;
+        }
+        
+        function setContent(html) {
+            editorElement.innerHTML = html || '';
+            // Focus at the end
+            setTimeout(() => {
+                editorElement.focus();
+                // Move cursor to end
+                const range = document.createRange();
+                const selection = window.getSelection();
+                if (editorElement.childNodes.length > 0) {
+                    const lastNode = editorElement.childNodes[editorElement.childNodes.length - 1];
+                    range.setStartAfter(lastNode);
+                    range.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+            }, 50);
+        }
+        
+        function getContent() {
+            return editorElement.innerHTML;
+        }
+        
+        function getJSON() {
+            return editorElement.innerHTML;
+        }
+        
+        function focus() {
+            editorElement.focus();
+        }
+        
+        // Formatting commands using execCommand
+        function toggleBold() {
+            document.execCommand('bold', false, null);
+            editorElement.focus();
+        }
+        
+        function toggleItalic() {
+            document.execCommand('italic', false, null);
+            editorElement.focus();
+        }
+        
+        function toggleUnderline() {
+            document.execCommand('underline', false, null);
+            editorElement.focus();
+        }
+        
+        function toggleHeading(level) {
+            document.execCommand('formatBlock', false, '<h' + level + '>');
+            editorElement.focus();
+        }
+        
+        function toggleBulletList() {
+            document.execCommand('insertUnorderedList', false, null);
+            editorElement.focus();
+        }
+        
+        function toggleOrderedList() {
+            document.execCommand('insertOrderedList', false, null);
+            editorElement.focus();
+        }
+        
+        function toggleBlockquote() {
+            document.execCommand('formatBlock', false, '<blockquote>');
+            editorElement.focus();
+        }
+        
+        function insertImage(src) {
+            document.execCommand('insertImage', false, src);
+            editorElement.focus();
+        }
+        
+        console.log('Editor initialized successfully');
+    </script>
+</body>
+</html>

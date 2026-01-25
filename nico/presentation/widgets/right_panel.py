@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 
 from nico.presentation.widgets.inspector import InspectorWidget
 from nico.presentation.widgets.ai_panel import AIPanelWidget
-from nico.domain.models import Project, Story, Chapter, Scene
+from nico.domain.models import Project, Story, Chapter, Scene, Character
 
 
 class RightPanelWidget(QWidget):
@@ -30,10 +30,9 @@ class RightPanelWidget(QWidget):
         self.ai_panel = AIPanelWidget()
         self.ai_tab_index = self.tabs.addTab(self.ai_panel, "🤖 AI Assistant")
         
-        # Inspector tab (disabled by default, enabled only for scenes)
+        # Inspector tab (now always enabled)
         self.inspector = InspectorWidget()
         self.inspector_tab_index = self.tabs.addTab(self.inspector, "🔍 Inspector")
-        self.tabs.setTabEnabled(self.inspector_tab_index, False)
         
         # Set AI tab as default
         self.tabs.setCurrentIndex(self.ai_tab_index)
@@ -44,31 +43,33 @@ class RightPanelWidget(QWidget):
     def set_project_context(self, project: Project) -> None:
         """Update both panels with project context."""
         self.ai_panel.set_project_context(project)
-        # Disable inspector for non-scene contexts
-        self.tabs.setTabEnabled(self.inspector_tab_index, False)
-        # Switch to AI tab
+        self.inspector.load_project(project)
+        # Keep AI tab active
         self.tabs.setCurrentIndex(self.ai_tab_index)
         
     def set_story_context(self, story: Story) -> None:
         """Update both panels with story context."""
         self.ai_panel.set_story_context(story)
-        # Disable inspector for non-scene contexts
-        self.tabs.setTabEnabled(self.inspector_tab_index, False)
-        # Switch to AI tab
+        self.inspector.load_story(story)
+        # Keep AI tab active
         self.tabs.setCurrentIndex(self.ai_tab_index)
         
     def set_chapter_context(self, chapter: Chapter) -> None:
         """Update both panels with chapter context."""
         self.ai_panel.set_chapter_context(chapter)
-        # Disable inspector for non-scene contexts
-        self.tabs.setTabEnabled(self.inspector_tab_index, False)
-        # Switch to AI tab
+        self.inspector.load_chapter(chapter)
+        # Keep AI tab active
+        self.tabs.setCurrentIndex(self.ai_tab_index)
+    
+    def set_character_context(self, character: Character) -> None:
+        """Update both panels with character context."""
+        # AI panel doesn't have character context yet, so just update inspector
+        self.inspector.load_character(character)
+        # Keep AI tab active
         self.tabs.setCurrentIndex(self.ai_tab_index)
         
     def set_scene_context(self, scene: Scene) -> None:
         """Update both panels with scene context."""
         self.ai_panel.set_scene_context(scene)
         self.inspector.load_scene(scene)
-        # Enable inspector for scene context
-        self.tabs.setTabEnabled(self.inspector_tab_index, True)
         # Keep AI tab active (user can switch to inspector if desired)

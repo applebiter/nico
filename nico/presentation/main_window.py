@@ -1,7 +1,7 @@
 """Main window for Nico application."""
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from PySide6.QtWidgets import (
     QMainWindow,
     QSplitter,
@@ -27,6 +27,9 @@ from nico.presentation.widgets.character_dialog import CharacterDialog
 from nico.presentation.widgets.location_dialog import LocationDialog
 from nico.presentation.widgets.event_dialog import EventDialog
 from nico.presentation.widgets.story_dialog import StoryDialog
+from nico.presentation.widgets.chapter_dialog import ChapterDialog
+from nico.presentation.widgets.scene_dialog import SceneDialog
+from nico.presentation.widgets.project_dialog import ProjectDialog
 from nico.application.context import get_app_context
 from nico.preferences import get_preferences
 from nico.theme import Theme
@@ -51,6 +54,9 @@ class MainWindow(QMainWindow):
         self._setup_menubar()
         self._setup_central_widget()
         self._setup_statusbar()
+        
+        # Restore window geometry
+        self._restore_geometry()
         
         # Load the first project if available
         self._load_initial_project()
@@ -172,15 +178,26 @@ class MainWindow(QMainWindow):
         self.editor.character_profile.character_updated.connect(self._on_character_updated)
         self.editor.characters_overview.character_updated.connect(self._on_character_updated)
         
+        # Connect project overview updates
+        self.editor.project_overview.project_edit_requested.connect(self._on_edit_project)
+        self.editor.project_overview.project_deleted.connect(self._on_project_deleted)
+        self.editor.project_overview.story_edit_requested.connect(self._on_edit_story)
+        
         # Connect stories overview updates to refresh binder
         self.editor.stories_overview.story_updated.connect(self._on_story_updated)
         self.editor.stories_overview.create_story_requested.connect(self._on_create_story)
         
         # Connect story overview updates
         self.editor.story_overview.story_updated.connect(self._on_story_updated)
+        self.editor.story_overview.create_chapter_requested.connect(self._on_create_chapter)
+        self.editor.story_overview.chapter_edit_requested.connect(self._on_edit_chapter)
+        self.editor.story_overview.story_edit_requested.connect(self._on_edit_story_from_overview)
         
         # Connect chapter overview updates
         self.editor.chapter_overview.chapter_updated.connect(self._on_chapter_updated)
+        self.editor.chapter_overview.chapter_edit_requested.connect(self._on_edit_chapter_from_overview)
+        self.editor.chapter_overview.create_scene_requested.connect(self._on_create_scene)
+        self.editor.chapter_overview.scene_edit_requested.connect(self._on_edit_scene)
         
         # Connect scene editor updates
         self.editor.scene_editor.scene_updated.connect(self._on_scene_updated)
@@ -454,9 +471,40 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event) -> None:
         """Handle window close event."""
+        # Save window geometry
+        self._save_geometry()
+        
         # Clean up database connection
         self.app_context.close()
         event.accept()
+    
+    def _save_geometry(self) -> None:
+        """Save window geometry and state."""
+        settings = QSettings("Applebiter", "Nico")
+        settings.setValue("geometry", self.saveGeometry())
+        settings.setValue("windowState", self.saveState())
+        settings.setValue("maximized", self.isMaximized())
+        settings.setValue("fullscreen", self.isFullScreen())
+    
+    def _restore_geometry(self) -> None:
+        """Restore window geometry and state."""
+        settings = QSettings("Applebiter", "Nico")
+        
+        # Restore geometry if available
+        geometry = settings.value("geometry")
+        if geometry:
+            self.restoreGeometry(geometry)
+        
+        # Restore window state if available
+        window_state = settings.value("windowState")
+        if window_state:
+            self.restoreState(window_state)
+        
+        # Restore maximized/fullscreen state
+        if settings.value("fullscreen", False, type=bool):
+            self.showFullScreen()
+        elif settings.value("maximized", False, type=bool):
+            self.showMaximized()
     
     def _on_manage_characters(self) -> None:
         """Open character management dialog."""
@@ -522,9 +570,11 @@ class MainWindow(QMainWindow):
     def _on_character_selected(self, character_id: int) -> None:
         """Handle character selection from binder."""
         try:
-            self.editor.show_character(character_id)
-            # TODO: Set character context in right panel when implemented
-            self.statusBar().showMessage("Viewing character profile")
+            character = self.app_context.character_service.get_character(character_id)
+            if character:
+                self.editor.show_character(character_id)
+                self.right_panel.set_character_context(character)
+                self.statusBar().showMessage("Viewing character profile")
         except Exception as e:
             self.statusBar().showMessage(f"Error loading character: {str(e)}")
             QMessageBox.warning(self, "Error", f"Failed to load character: {str(e)}")
@@ -619,6 +669,222 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             # Story was created, refresh binder and show stories overview
             self._on_story_updated()
+    
+    def _on_edit_project(self) -> None:
+        """Handle edit project request."""
+        current_project = self.binder.current_project
+        if not current_project:
+            QMessageBox.warning(
+                self,
+                "No Project",
+                "Please select a project to edit."
+            )
+            return
+        
+        dialog = ProjectDialog(current_project, parent=self)
+        if dialog.exec():
+            # Project was edited, refresh binder and reload project overview
+            refreshed_project = self.app_context.project_service.get_project(current_project.id)
+            if refreshed_project:
+                self.binder.load_project(refreshed_project)
+                self.editor.show_project(refreshed_project)
+                self.statusBar().showMessage("Project updated successfully")
+    
+    def _on_edit_story(self, story_id: int) -> None:
+        """Handle edit story request from project overview."""
+        if not self.binder.current_project:
+            return
+        
+        # Find the story to edit
+        story = next((s for s in self.binder.current_project.stories if s.id == story_id), None)
+        if not story:
+            QMessageBox.warning(
+                self,
+                "Story Not Found",
+                "Could not find the selected story."
+            )
+            return
+        
+        dialog = StoryDialog(self.binder.current_project.id, story, parent=self)
+        if dialog.exec():
+            # Story was edited, refresh binder and reload project overview
+            refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+            if refreshed_project:
+                self.binder.load_project(refreshed_project)
+                self.editor.show_project(refreshed_project)
+                self.statusBar().showMessage("Story updated successfully")
+    
+    def _on_project_deleted(self) -> None:
+        """Handle project deletion - show empty state."""
+        # Clear the binder
+        self.binder.current_project = None
+        self.binder.tree.clear()
+        
+        # Show empty state
+        self._show_empty_state()
+        self.statusBar().showMessage("Project deleted")
+    
+    def _on_edit_story_from_overview(self) -> None:
+        """Handle edit story request from story overview."""
+        current_story = self.editor.story_overview.current_story
+        if not current_story:
+            return
+        
+        dialog = StoryDialog(current_story.project_id, current_story, parent=self)
+        if dialog.exec():
+            # Story was edited, refresh binder and reload story overview
+            if self.binder.current_project:
+                refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+                if refreshed_project:
+                    self.binder.load_project(refreshed_project)
+                    # Find the refreshed story and show it
+                    refreshed_story = next(
+                        (s for s in refreshed_project.stories if s.id == current_story.id),
+                        None
+                    )
+                    if refreshed_story:
+                        self.editor.show_story(refreshed_story)
+                        self.statusBar().showMessage("Story updated successfully")
+    
+    def _on_create_chapter(self) -> None:
+        """Handle create chapter request from story overview."""
+        # Get the current story from the story overview
+        current_story = self.editor.story_overview.current_story
+        if not current_story:
+            QMessageBox.warning(
+                self,
+                "No Story",
+                "Please select a story before creating a chapter."
+            )
+            return
+        
+        dialog = ChapterDialog(current_story.id, parent=self)
+        if dialog.exec():
+            # Chapter was created, refresh binder and reload story overview
+            if self.binder.current_project:
+                refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+                if refreshed_project:
+                    self.binder.load_project(refreshed_project)
+                    # Find the refreshed story and show it
+                    refreshed_story = next(
+                        (s for s in refreshed_project.stories if s.id == current_story.id),
+                        None
+                    )
+                    if refreshed_story:
+                        self.editor.show_story(refreshed_story)
+                        self.statusBar().showMessage("Chapter created successfully")
+    
+    def _on_edit_chapter(self, chapter_id: int) -> None:
+        """Handle edit chapter request."""
+        # Get the current story for context
+        current_story = self.editor.story_overview.current_story
+        if not current_story:
+            return
+        
+        # Find the chapter to edit
+        chapter = next((ch for ch in current_story.chapters if ch.id == chapter_id), None)
+        if not chapter:
+            QMessageBox.warning(
+                self,
+                "Chapter Not Found",
+                "Could not find the selected chapter."
+            )
+            return
+        
+        dialog = ChapterDialog(current_story.id, chapter, parent=self)
+        if dialog.exec():
+            # Chapter was edited, refresh binder and reload story overview
+            if self.binder.current_project:
+                refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+                if refreshed_project:
+                    self.binder.load_project(refreshed_project)
+                    # Find the refreshed story and show it
+                    refreshed_story = next(
+                        (s for s in refreshed_project.stories if s.id == current_story.id),
+                        None
+                    )
+                    if refreshed_story:
+                        self.editor.show_story(refreshed_story)
+                        self.statusBar().showMessage("Chapter updated successfully")
+    
+    def _on_edit_chapter_from_overview(self, chapter_id: int) -> None:
+        """Handle edit chapter request from chapter overview."""
+        # Get the current chapter from the chapter overview
+        current_chapter = self.editor.chapter_overview.current_chapter
+        if not current_chapter:
+            return
+        
+        dialog = ChapterDialog(current_chapter.story_id, current_chapter, parent=self)
+        if dialog.exec():
+            # Chapter was edited, refresh binder and reload chapter overview
+            if self.binder.current_project:
+                refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+                if refreshed_project:
+                    self.binder.load_project(refreshed_project)
+                    # Find the refreshed chapter and show it
+                    for story in refreshed_project.stories:
+                        for chapter in story.chapters:
+                            if chapter.id == chapter_id:
+                                self.editor.show_chapter(chapter)
+                                self.statusBar().showMessage("Chapter updated successfully")
+                                return
+    
+    def _on_create_scene(self) -> None:
+        """Handle create scene request from chapter overview."""
+        current_chapter = self.editor.chapter_overview.current_chapter
+        if not current_chapter:
+            QMessageBox.warning(
+                self,
+                "No Chapter",
+                "Please select a chapter before creating a scene."
+            )
+            return
+        
+        dialog = SceneDialog(current_chapter.id, parent=self)
+        if dialog.exec():
+            # Scene was created, refresh binder and reload chapter overview
+            if self.binder.current_project:
+                refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+                if refreshed_project:
+                    self.binder.load_project(refreshed_project)
+                    # Find the refreshed chapter and show it
+                    for story in refreshed_project.stories:
+                        for chapter in story.chapters:
+                            if chapter.id == current_chapter.id:
+                                self.editor.show_chapter(chapter)
+                                self.statusBar().showMessage("Scene created successfully")
+                                return
+    
+    def _on_edit_scene(self, scene_id: int) -> None:
+        """Handle edit scene request."""
+        current_chapter = self.editor.chapter_overview.current_chapter
+        if not current_chapter:
+            return
+        
+        # Find the scene to edit
+        scene = next((s for s in current_chapter.scenes if s.id == scene_id), None)
+        if not scene:
+            QMessageBox.warning(
+                self,
+                "Scene Not Found",
+                "Could not find the selected scene."
+            )
+            return
+        
+        dialog = SceneDialog(current_chapter.id, scene, parent=self)
+        if dialog.exec():
+            # Scene was edited, refresh binder and reload chapter overview
+            if self.binder.current_project:
+                refreshed_project = self.app_context.project_service.get_project(self.binder.current_project.id)
+                if refreshed_project:
+                    self.binder.load_project(refreshed_project)
+                    # Find the refreshed chapter and show it
+                    for story in refreshed_project.stories:
+                        for chapter in story.chapters:
+                            if chapter.id == current_chapter.id:
+                                self.editor.show_chapter(chapter)
+                                self.statusBar().showMessage("Scene updated successfully")
+                                return
     
     def _on_item_deleted(self, item_type: str) -> None:
         """Handle item deletion from binder - show appropriate overview."""

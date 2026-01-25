@@ -37,12 +37,7 @@ class CharactersOverview(QWidget):
         
     def _setup_ui(self) -> None:
         """Set up the widget layout."""
-        # Main scroll area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        
-        # Content widget
+        # Content widget first
         content = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
@@ -85,6 +80,11 @@ class CharactersOverview(QWidget):
         layout.addStretch()
         
         content.setLayout(layout)
+        
+        # Main scroll area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(content)
         
         # Set scroll area as the main layout

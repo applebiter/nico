@@ -272,7 +272,7 @@ class CharacterProfileWidget(QWidget):
         basic_layout.addRow("Nickname:", self.nickname_value)
         
         self.physical_value = QTextEdit()
-        self.physical_value.setMaximumHeight(100)
+        self.physical_value.setMinimumHeight(160)  # Approximately 8 lines
         self.physical_value.setPlaceholderText("Describe the character's physical appearance...")
         self.physical_value.textChanged.connect(self._on_physical_description_changed)
         basic_layout.addRow("Physical Description:", self.physical_value)

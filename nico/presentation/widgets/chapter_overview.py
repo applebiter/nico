@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QToolButton,
     QMessageBox,
+    QMenu,
 )
 
 from nico.domain.models import Chapter
@@ -26,6 +27,10 @@ class ChapterOverview(QWidget):
     
     # Signal emitted when user wants to create a new scene
     create_scene_requested = Signal()
+    # Signal emitted when user wants to edit a scene
+    scene_edit_requested = Signal(int)  # scene_id
+    # Signal emitted when user wants to edit the chapter
+    chapter_edit_requested = Signal(int)  # chapter_id
     # Signal emitted when user clicks on a scene
     scene_selected = Signal(int)  # scene_id
     # Signal emitted when scene order changes
@@ -57,12 +62,16 @@ class ChapterOverview(QWidget):
         # Header
         header = QVBoxLayout()
         
-        # Title row with delete button
+        # Title row with edit and delete buttons
         title_row = QHBoxLayout()
         self.title_label = QLabel("Chapter")
         self.title_label.setStyleSheet("font-size: 24px; font-weight: bold;")
         title_row.addWidget(self.title_label)
         title_row.addStretch()
+        
+        self.edit_btn = QPushButton("✏️ Edit Chapter")
+        self.edit_btn.clicked.connect(self._on_edit_chapter)
+        title_row.addWidget(self.edit_btn)
         
         self.delete_btn = QPushButton("🗑️ Delete Chapter")
         self.delete_btn.clicked.connect(self._on_delete_chapter)
@@ -104,10 +113,9 @@ class ChapterOverview(QWidget):
         self.create_scene_btn.clicked.connect(self.create_scene_requested.emit)
         create_btn_layout.addWidget(self.create_scene_btn)
         
-        self.continuous_write_btn = QPushButton("📖 Continuous Writing Mode")
-        self.continuous_write_btn.clicked.connect(self._on_continuous_writing)
-        self.continuous_write_btn.setToolTip("Open all scenes in seamless writing view")
-        create_btn_layout.addWidget(self.continuous_write_btn)
+        self.edit_scene_btn = QPushButton("📝 Edit Scene")
+        self.edit_scene_btn.clicked.connect(self._on_open_scene_clicked)
+        create_btn_layout.addWidget(self.edit_scene_btn)
         
         create_btn_layout.addStretch()
         scenes_layout.addLayout(create_btn_layout)
@@ -117,6 +125,8 @@ class ChapterOverview(QWidget):
         
         self.scenes_list = QListWidget()
         self.scenes_list.itemDoubleClicked.connect(self._on_scene_double_clicked)
+        self.scenes_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.scenes_list.customContextMenuRequested.connect(self._show_scene_context_menu)
         list_layout.addWidget(self.scenes_list)
         
         # Reorder buttons
@@ -216,6 +226,49 @@ class ChapterOverview(QWidget):
             if scene_id:
                 scene_ids.append(scene_id)
         self.scenes_reordered.emit(scene_ids)
+    
+    def _on_open_scene_clicked(self) -> None:
+        """Handle edit scene button click - opens scene in editor."""
+        current_item = self.scenes_list.currentItem()
+        if current_item:
+            scene_id = current_item.data(Qt.ItemDataRole.UserRole)
+            if scene_id:
+                self.scene_selected.emit(scene_id)
+    
+    def _on_edit_scene_clicked(self) -> None:
+        """Handle edit scene metadata button click."""
+        current_item = self.scenes_list.currentItem()
+        if current_item:
+            scene_id = current_item.data(Qt.ItemDataRole.UserRole)
+            if scene_id:
+                self.scene_edit_requested.emit(scene_id)
+    
+    def _show_scene_context_menu(self, position) -> None:
+        """Show context menu for scene list."""
+        item = self.scenes_list.itemAt(position)
+        if not item:
+            return
+        
+        scene_id = item.data(Qt.ItemDataRole.UserRole)
+        if not scene_id:
+            return
+        
+        menu = QMenu(self)
+        
+        open_action = menu.addAction("📝 Open Scene")
+        edit_metadata_action = menu.addAction("⚙️ Edit Scene Details")
+        
+        action = menu.exec(self.scenes_list.mapToGlobal(position))
+        
+        if action == open_action:
+            self.scene_selected.emit(scene_id)
+        elif action == edit_metadata_action:
+            self.scene_edit_requested.emit(scene_id)
+    
+    def _on_edit_chapter(self) -> None:
+        """Handle edit chapter button click."""
+        if self.current_chapter:
+            self.chapter_edit_requested.emit(self.current_chapter.id)
     
     def _on_delete_chapter(self) -> None:
         """Delete the current chapter after confirmation."""

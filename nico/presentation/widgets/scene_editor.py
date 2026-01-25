@@ -1,76 +1,64 @@
-"""Scene editor widget - rich text editor for scene content."""
+"""Scene editor widget - WYSIWYG editor for scene content using TipTap."""
+import os
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QObject, Slot, QUrl
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QTextEdit,
     QLabel,
     QToolBar,
-    QComboBox,
     QPushButton,
-    QStackedWidget,
     QMessageBox,
 )
-from PySide6.QtGui import QFont
+from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtWebChannel import QWebChannel
 
 from nico.domain.models import Scene
-from nico.presentation.widgets.continuous_writing import ContinuousWritingWidget
 from nico.application.context import get_app_context
 
 
-class SceneEditor(QWidget):
-    """Rich text editor for scene content with optional continuous mode."""
+class EditorBridge(QObject):
+    """Bridge object for communication between Python and JavaScript."""
     
-    # Signal emitted when switching to continuous mode for a chapter
-    continuous_mode_requested = Signal(int)  # chapter_id
+    contentChangedSignal = Signal(str, str, int)  # html, json, word_count
+    editorReadySignal = Signal()
+    
+    @Slot(str, str, int)
+    def contentChanged(self, html: str, json: str, word_count: int):
+        """Called by JavaScript when content changes."""
+        self.contentChangedSignal.emit(html, json, word_count)
+    
+    @Slot()
+    def editorReady(self):
+        """Called by JavaScript when editor is initialized."""
+        self.editorReadySignal.emit()
+
+
+class SceneEditor(QWidget):
+    """WYSIWYG editor for scene content using TipTap in a web view."""
+    
     # Signal emitted when scene is updated (edited/deleted)
     scene_updated = Signal()
     
     def __init__(self) -> None:
         super().__init__()
         self.current_scene: Optional[Scene] = None
-        self.current_chapter_id: Optional[int] = None
         self.app_context = get_app_context()
+        self.auto_save_enabled = True
+        self._content_dirty = False
         self._setup_ui()
         
     def _setup_ui(self) -> None:
         """Set up the widget layout."""
         layout = QVBoxLayout()
         layout.setContentsMargins(5, 5, 5, 5)
-        
-        # Mode selector at the top
-        mode_header = QHBoxLayout()
-        mode_label = QLabel("View Mode:")
-        mode_label.setStyleSheet("font-weight: bold;")
-        mode_header.addWidget(mode_label)
-        
-        self.scene_mode_btn = QPushButton("📄 Scene")
-        self.scene_mode_btn.setCheckable(True)
-        self.scene_mode_btn.setChecked(True)
-        self.scene_mode_btn.clicked.connect(self._switch_to_scene_mode)
-        mode_header.addWidget(self.scene_mode_btn)
-        
-        self.continuous_mode_btn = QPushButton("📖 Continuous Writing")
-        self.continuous_mode_btn.setCheckable(True)
-        self.continuous_mode_btn.clicked.connect(self._switch_to_continuous_mode)
-        mode_header.addWidget(self.continuous_mode_btn)
-        
-        mode_header.addStretch()
-        layout.addLayout(mode_header)
-        
-        # Stacked widget for different modes
-        self.mode_stack = QStackedWidget()
-        
-        # Scene mode (individual scene editing)
-        scene_mode_widget = QWidget()
-        scene_layout = QVBoxLayout()
-        scene_layout.setContentsMargins(0, 5, 0, 0)
+        layout.setSpacing(5)
         
         # Header with scene info
         header = QHBoxLayout()
+        header.setSpacing(8)
         self.scene_title = QLabel("No scene selected")
         self.scene_title.setStyleSheet("font-weight: bold; font-size: 14px;")
         header.addWidget(self.scene_title)
@@ -86,35 +74,92 @@ class SceneEditor(QWidget):
         self.word_count.setStyleSheet("color: #666;")
         header.addWidget(self.word_count)
         
-        scene_layout.addLayout(header)
+        layout.addLayout(header)
         
-        # Formatting toolbar (placeholder)
+        # Formatting toolbar
         toolbar = QToolBar()
-        toolbar.addAction("B", self._on_bold)
-        toolbar.addAction("I", self._on_italic)
-        toolbar.addAction("U", self._on_underline)
+        toolbar.setStyleSheet("QToolBar { border: none; spacing: 5px; padding: 2px; }")
+        toolbar.setMaximumHeight(32)
+        
+        bold_action = toolbar.addAction("B")
+        bold_action.setToolTip("Bold")
+        bold_action.triggered.connect(self._on_bold)
+        
+        italic_action = toolbar.addAction("I")
+        italic_action.setToolTip("Italic")
+        italic_action.triggered.connect(self._on_italic)
+        
+        underline_action = toolbar.addAction("U")
+        underline_action.setToolTip("Underline")
+        underline_action.triggered.connect(self._on_underline)
+        
         toolbar.addSeparator()
         
-        # Font size combo
-        font_size = QComboBox()
-        font_size.addItems(["10", "12", "14", "16", "18", "20", "24"])
-        font_size.setCurrentText("14")
-        toolbar.addWidget(font_size)
+        h1_action = toolbar.addAction("H1")
+        h1_action.setToolTip("Heading 1")
+        h1_action.triggered.connect(lambda: self._on_heading(1))
         
-        scene_layout.addWidget(toolbar)
+        h2_action = toolbar.addAction("H2")
+        h2_action.setToolTip("Heading 2")
+        h2_action.triggered.connect(lambda: self._on_heading(2))
         
-        # Text editor
-        self.editor = QTextEdit()
-        self.editor.setPlaceholderText("Select a scene to start writing...")
+        h3_action = toolbar.addAction("H3")
+        h3_action.setToolTip("Heading 3")
+        h3_action.triggered.connect(lambda: self._on_heading(3))
         
-        # Set a nice writing font
-        font = QFont("Georgia", 14)
-        self.editor.setFont(font)
+        toolbar.addSeparator()
         
-        scene_layout.addWidget(self.editor)
+        bullet_action = toolbar.addAction("• List")
+        bullet_action.setToolTip("Bullet List")
+        bullet_action.triggered.connect(self._on_bullet_list)
+        
+        number_action = toolbar.addAction("1. List")
+        number_action.setToolTip("Numbered List")
+        number_action.triggered.connect(self._on_numbered_list)
+        
+        quote_action = toolbar.addAction("\" Quote")
+        quote_action.setToolTip("Block Quote")
+        quote_action.triggered.connect(self._on_blockquote)
+        
+        layout.addWidget(toolbar)
+        
+        # Web view with TipTap editor
+        self.web_view = QWebEngineView()
+        self.web_view.setMinimumHeight(400)
+        
+        # Enable developer tools for debugging
+        from PySide6.QtWebEngineCore import QWebEngineSettings
+        settings = self.web_view.page().settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        
+        # Set up QWebChannel for Python-JavaScript communication
+        self.channel = QWebChannel()
+        self.bridge = EditorBridge()
+        self.channel.registerObject("bridge", self.bridge)
+        self.web_view.page().setWebChannel(self.channel)
+        
+        # Connect signals
+        self.bridge.contentChangedSignal.connect(self._on_content_changed)
+        self.bridge.editorReadySignal.connect(self._on_editor_ready)
+        
+        # Enable console logging
+        self.web_view.page().javaScriptConsoleMessage = self._on_js_console_message
+        
+        # Load the editor HTML
+        editor_html_path = os.path.join(
+            os.path.dirname(__file__), 
+            "editor_template.html"
+        )
+        print(f"Loading editor from: {editor_html_path}")
+        self.web_view.setUrl(QUrl.fromLocalFile(editor_html_path))
+        
+        layout.addWidget(self.web_view, 1)  # Stretch factor of 1 to expand
         
         # Footer with scene metadata
         self.footer = QHBoxLayout()
+        self.footer.setSpacing(12)
+        self.footer.setContentsMargins(0, 5, 0, 0)
         self.beat_label = QLabel("")
         self.pov_label = QLabel("")
         self.setting_label = QLabel("")
@@ -124,35 +169,59 @@ class SceneEditor(QWidget):
         self.footer.addWidget(self.pov_label)
         self.footer.addWidget(self.setting_label)
         
-        scene_layout.addLayout(self.footer)
-        scene_mode_widget.setLayout(scene_layout)
-        
-        # Continuous mode
-        self.continuous_widget = ContinuousWritingWidget()
-        
-        # Add both modes to stack
-        self.mode_stack.addWidget(scene_mode_widget)
-        self.mode_stack.addWidget(self.continuous_widget)
-        
-        layout.addWidget(self.mode_stack)
+        layout.addLayout(self.footer)
         self.setLayout(layout)
+    
+    def _on_js_console_message(self, level, message, line, source):
+        """Log JavaScript console messages to Python console."""
+        print(f"JS Console [{level}] {source}:{line} - {message}")
+    
+    def _on_editor_ready(self):
+        """Called when the JavaScript editor is ready."""
+        # Set theme
+        from nico.preferences import Preferences
+        prefs = Preferences()
+        theme = prefs.theme
+        self.web_view.page().runJavaScript(f"setTheme('{theme}');")
+        
+        # If we have a current scene, load it
+        if self.current_scene:
+            self._load_content_to_editor()
+    
+    def _on_content_changed(self, html: str, json: str, word_count: int):
+        """Called when editor content changes."""
+        self.word_count.setText(f"{word_count:,} words")
+        self._content_dirty = True
+        
+        # Auto-save if enabled and we have a current scene
+        if self.auto_save_enabled and self.current_scene:
+            self._save_content(html, word_count)
+    
+    def _save_content(self, html: str, word_count: int):
+        """Save content to the database."""
+        if not self.current_scene:
+            return
+        
+        try:
+            self.current_scene.content = html
+            self.current_scene.word_count = word_count
+            self.app_context.commit()
+            self._content_dirty = False
+        except Exception as e:
+            self.app_context.rollback()
+            print(f"Error saving scene: {e}")
     
     def load_scene(self, scene: Scene) -> None:
         """Load a scene into the editor."""
         self.current_scene = scene
-        # Store chapter_id if available (needed for continuous mode)
-        self.current_chapter_id = scene.chapter_id if hasattr(scene, 'chapter_id') else None
-        
-        # Switch to scene mode by default
-        self._switch_to_scene_mode()
         
         # Update header
         self.scene_title.setText(f"✍️ {scene.title}")
         self.word_count.setText(f"{scene.word_count:,} words")
         self.delete_btn.setVisible(True)
         
-        # Load content
-        self.editor.setHtml(scene.content)
+        # Load content into editor
+        self._load_content_to_editor()
         
         # Update footer
         self.beat_label.setText(f"Beat: {scene.beat}" if scene.beat else "")
@@ -166,43 +235,51 @@ class SceneEditor(QWidget):
             self.pov_label.setText("")
             self.setting_label.setText("")
     
-    def load_chapter_continuous(self, chapter) -> None:
-        """Load entire chapter in continuous writing mode."""
-        self.current_chapter_id = chapter.id
-        self._switch_to_continuous_mode()
-        self.continuous_widget.load_chapter(chapter)
-    
-    def _switch_to_scene_mode(self) -> None:
-        """Switch to single scene editing mode."""
-        self.scene_mode_btn.setChecked(True)
-        self.continuous_mode_btn.setChecked(False)
-        self.mode_stack.setCurrentIndex(0)
-    
-    def _switch_to_continuous_mode(self) -> None:
-        """Switch to continuous writing mode."""
-        self.continuous_mode_btn.setChecked(True)
-        self.scene_mode_btn.setChecked(False)
-        self.mode_stack.setCurrentIndex(1)
+    def _load_content_to_editor(self):
+        """Load current scene content into the JavaScript editor."""
+        if not self.current_scene:
+            return
         
-        # Load current scene in continuous mode
-        if self.current_scene:
-            self.continuous_widget.load_single_scene(self.current_scene)
-        else:
-            self.pov_label.setText("")
-            self.setting_label.setText("")
+        # Set theme
+        from nico.preferences import Preferences
+        prefs = Preferences()
+        theme = prefs.theme
+        self.web_view.page().runJavaScript(f"setTheme('{theme}');")
         
-    # Formatting action handlers (placeholders)
+        content = self.current_scene.content or ""
+        # Escape content for JavaScript
+        content_escaped = content.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n').replace('\r', '')
+        js = f"setContent('{content_escaped}');"
+        self.web_view.page().runJavaScript(js)
+    
+    # Formatting action handlers
     def _on_bold(self) -> None:
         """Toggle bold formatting."""
-        pass
+        self.web_view.page().runJavaScript("toggleBold();")
         
     def _on_italic(self) -> None:
         """Toggle italic formatting."""
-        pass
+        self.web_view.page().runJavaScript("toggleItalic();")
         
     def _on_underline(self) -> None:
         """Toggle underline formatting."""
-        pass
+        self.web_view.page().runJavaScript("toggleUnderline();")
+    
+    def _on_heading(self, level: int) -> None:
+        """Toggle heading formatting."""
+        self.web_view.page().runJavaScript(f"toggleHeading({level});")
+    
+    def _on_bullet_list(self) -> None:
+        """Toggle bullet list."""
+        self.web_view.page().runJavaScript("toggleBulletList();")
+    
+    def _on_numbered_list(self) -> None:
+        """Toggle numbered list."""
+        self.web_view.page().runJavaScript("toggleOrderedList();")
+    
+    def _on_blockquote(self) -> None:
+        """Toggle blockquote."""
+        self.web_view.page().runJavaScript("toggleBlockquote();")
     
     def _on_delete_scene(self) -> None:
         """Delete the current scene after confirmation."""
@@ -225,7 +302,7 @@ class SceneEditor(QWidget):
                 self.app_context.commit()
                 self.current_scene = None
                 self.scene_title.setText("No scene selected")
-                self.editor.clear()
+                self.web_view.page().runJavaScript("setContent('');")
                 self.delete_btn.setVisible(False)
                 self.scene_updated.emit()
                 QMessageBox.information(

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QToolButton,
     QMessageBox,
+    QMenu,
 )
 
 from nico.domain.models import Story
@@ -26,12 +27,16 @@ class StoryOverview(QWidget):
     
     # Signal emitted when user wants to create a new chapter
     create_chapter_requested = Signal()
+    # Signal emitted when user wants to edit a chapter
+    chapter_edit_requested = Signal(int)  # chapter_id
     # Signal emitted when user clicks on a chapter
     chapter_selected = Signal(int)  # chapter_id
     # Signal emitted when chapter order changes
     chapters_reordered = Signal(list)  # list of chapter_ids in new order
     # Signal emitted when story is updated (edited/deleted)
     story_updated = Signal()
+    # Signal emitted when user wants to edit the story
+    story_edit_requested = Signal()
     
     def __init__(self) -> None:
         super().__init__()
@@ -55,12 +60,16 @@ class StoryOverview(QWidget):
         # Header
         header = QVBoxLayout()
         
-        # Title row with delete button
+        # Title row with edit and delete buttons
         title_row = QHBoxLayout()
         self.title_label = QLabel("Story")
         self.title_label.setStyleSheet("font-size: 24px; font-weight: bold;")
         title_row.addWidget(self.title_label)
         title_row.addStretch()
+        
+        self.edit_btn = QPushButton("✏️ Edit Story")
+        self.edit_btn.clicked.connect(self._on_edit_story)
+        title_row.addWidget(self.edit_btn)
         
         self.delete_btn = QPushButton("🗑️ Delete Story")
         self.delete_btn.clicked.connect(self._on_delete_story)
@@ -106,11 +115,16 @@ class StoryOverview(QWidget):
         chapters_group = QGroupBox("Chapter Index")
         chapters_layout = QVBoxLayout()
         
-        # Create chapter button
+        # Create/edit chapter buttons
         create_btn_layout = QHBoxLayout()
         self.create_chapter_btn = QPushButton("➕ New Chapter")
         self.create_chapter_btn.clicked.connect(self.create_chapter_requested.emit)
         create_btn_layout.addWidget(self.create_chapter_btn)
+        
+        self.edit_chapter_btn = QPushButton("✏️ Edit Chapter")
+        self.edit_chapter_btn.clicked.connect(self._on_edit_chapter_clicked)
+        create_btn_layout.addWidget(self.edit_chapter_btn)
+        
         create_btn_layout.addStretch()
         chapters_layout.addLayout(create_btn_layout)
         
@@ -119,6 +133,8 @@ class StoryOverview(QWidget):
         
         self.chapters_list = QListWidget()
         self.chapters_list.itemDoubleClicked.connect(self._on_chapter_double_clicked)
+        self.chapters_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.chapters_list.customContextMenuRequested.connect(self._show_chapter_context_menu)
         list_layout.addWidget(self.chapters_list)
         
         # Reorder buttons
@@ -197,6 +213,36 @@ class StoryOverview(QWidget):
         if chapter_id:
             self.chapter_selected.emit(chapter_id)
     
+    def _on_edit_chapter_clicked(self) -> None:
+        """Handle edit chapter button click."""
+        current_item = self.chapters_list.currentItem()
+        if current_item:
+            chapter_id = current_item.data(Qt.ItemDataRole.UserRole)
+            if chapter_id:
+                self.chapter_edit_requested.emit(chapter_id)
+    
+    def _show_chapter_context_menu(self, position) -> None:
+        """Show context menu for chapter list."""
+        item = self.chapters_list.itemAt(position)
+        if not item:
+            return
+        
+        chapter_id = item.data(Qt.ItemDataRole.UserRole)
+        if not chapter_id:
+            return
+        
+        menu = QMenu(self)
+        
+        edit_action = menu.addAction("✏️ Edit Chapter")
+        open_action = menu.addAction("📂 Open Chapter")
+        
+        action = menu.exec(self.chapters_list.mapToGlobal(position))
+        
+        if action == edit_action:
+            self.chapter_edit_requested.emit(chapter_id)
+        elif action == open_action:
+            self.chapter_selected.emit(chapter_id)
+    
     def _move_chapter_up(self) -> None:
         """Move selected chapter up in the list."""
         current_row = self.chapters_list.currentRow()
@@ -224,6 +270,11 @@ class StoryOverview(QWidget):
             if chapter_id:
                 chapter_ids.append(chapter_id)
         self.chapters_reordered.emit(chapter_ids)
+    
+    def _on_edit_story(self) -> None:
+        """Handle edit story button click."""
+        if self.current_story:
+            self.story_edit_requested.emit()
     
     def _on_delete_story(self) -> None:
         """Delete the current story after confirmation."""
