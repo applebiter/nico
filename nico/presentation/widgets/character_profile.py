@@ -174,6 +174,8 @@ class CharacterProfileWidget(QWidget):
             }
         """)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.image_label.mousePressEvent = self._on_portrait_clicked
         image_container_layout.addWidget(self.image_label)
         image_container_layout.addStretch()
         image_container.setLayout(image_container_layout)
@@ -204,14 +206,16 @@ class CharacterProfileWidget(QWidget):
         # Dimension preset dropdown
         self.dimension_preset = QComboBox()
         self.dimension_preset.addItems([
-            "1024x1024 (Square)",
-            "1536x1024 (Landscape 3:2)",
-            "1920x1080 (Landscape 16:9)",
-            "1280x720 (Landscape HD)",
-            "1024x1536 (Portrait 2:3)",
-            "1080x1920 (Portrait 9:16)",
-            "720x1280 (Portrait HD)",
-            "Custom..."
+            "Square 1024×1024",
+            "Portrait 832×1216",
+            "Portrait 896×1152",
+            "Landscape 1216×832",
+            "Landscape 1152×896",
+            "Wide 1344×768",
+            "Wide 1536×640",
+            "Tall 768×1344",
+            "Tall 640×1536",
+            "Custom"
         ])
         self.dimension_preset.setCurrentIndex(0)
         self.dimension_preset.currentTextChanged.connect(self._on_dimension_preset_changed)
@@ -262,14 +266,17 @@ class CharacterProfileWidget(QWidget):
         self.basic_group = QGroupBox("Basic Information")
         basic_layout = QFormLayout()
         
-        self.title_value = QLabel()
-        basic_layout.addRow("Title:", self.title_value)
+        self.title_edit = QLineEdit()
+        self.title_edit.setPlaceholderText("Mr., Dr., Sir, etc.")
+        basic_layout.addRow("Title:", self.title_edit)
         
         self.full_name_value = QLabel()
+        self.full_name_value.setStyleSheet("color: #888; font-style: italic;")
         basic_layout.addRow("Full Name:", self.full_name_value)
         
-        self.nickname_value = QLabel()
-        basic_layout.addRow("Nickname:", self.nickname_value)
+        self.nickname_edit = QLineEdit()
+        self.nickname_edit.setPlaceholderText("Preferred name or nickname")
+        basic_layout.addRow("Nickname:", self.nickname_edit)
         
         self.physical_value = QTextEdit()
         self.physical_value.setMinimumHeight(160)  # Approximately 8 lines
@@ -285,17 +292,21 @@ class CharacterProfileWidget(QWidget):
         self.identity_group = QGroupBox("Identity")
         identity_layout = QFormLayout()
         
-        self.gender_value = QLabel()
-        identity_layout.addRow("Gender:", self.gender_value)
+        self.gender_edit = QLineEdit()
+        self.gender_edit.setPlaceholderText("Gender identity")
+        identity_layout.addRow("Gender:", self.gender_edit)
         
-        self.ethnicity_value = QLabel()
-        identity_layout.addRow("Ethnicity:", self.ethnicity_value)
+        self.ethnicity_edit = QLineEdit()
+        self.ethnicity_edit.setPlaceholderText("Ethnic background")
+        identity_layout.addRow("Ethnicity:", self.ethnicity_edit)
         
-        self.nationality_value = QLabel()
-        identity_layout.addRow("Nationality:", self.nationality_value)
+        self.nationality_edit = QLineEdit()
+        self.nationality_edit.setPlaceholderText("National origin")
+        identity_layout.addRow("Nationality:", self.nationality_edit)
         
-        self.religion_value = QLabel()
-        identity_layout.addRow("Religion:", self.religion_value)
+        self.religion_edit = QLineEdit()
+        self.religion_edit.setPlaceholderText("Religious affiliation")
+        identity_layout.addRow("Religion:", self.religion_edit)
         
         self.identity_group.setLayout(identity_layout)
         self.content_layout.addWidget(self.identity_group)
@@ -305,20 +316,25 @@ class CharacterProfileWidget(QWidget):
         self.life_group = QGroupBox("Life Details")
         life_layout = QFormLayout()
         
-        self.occupation_value = QLabel()
-        life_layout.addRow("Occupation:", self.occupation_value)
+        self.occupation_edit = QLineEdit()
+        self.occupation_edit.setPlaceholderText("Current occupation")
+        life_layout.addRow("Occupation:", self.occupation_edit)
         
-        self.education_value = QLabel()
-        life_layout.addRow("Education:", self.education_value)
+        self.education_edit = QLineEdit()
+        self.education_edit.setPlaceholderText("Educational background")
+        life_layout.addRow("Education:", self.education_edit)
         
-        self.marital_value = QLabel()
-        life_layout.addRow("Marital Status:", self.marital_value)
+        self.marital_edit = QLineEdit()
+        self.marital_edit.setPlaceholderText("Marital status")
+        life_layout.addRow("Marital Status:", self.marital_edit)
         
-        self.dob_value = QLabel()
-        life_layout.addRow("Date of Birth:", self.dob_value)
+        self.dob_edit = QLineEdit()
+        self.dob_edit.setPlaceholderText("Date of birth")
+        life_layout.addRow("Date of Birth:", self.dob_edit)
         
-        self.dod_value = QLabel()
-        life_layout.addRow("Date of Death:", self.dod_value)
+        self.dod_edit = QLineEdit()
+        self.dod_edit.setPlaceholderText("Date of death (if applicable)")
+        life_layout.addRow("Date of Death:", self.dod_edit)
         
         self.life_group.setLayout(life_layout)
         self.content_layout.addWidget(self.life_group)
@@ -328,23 +344,122 @@ class CharacterProfileWidget(QWidget):
         self.psychology_group = QGroupBox("Psychology")
         psych_layout = QFormLayout()
         
-        self.myers_briggs_value = QLabel()
-        psych_layout.addRow("Myers-Briggs:", self.myers_briggs_value)
+        self.myers_briggs_edit = QLineEdit()
+        self.myers_briggs_edit.setPlaceholderText("e.g., INTJ, ENFP")
+        psych_layout.addRow("Myers-Briggs:", self.myers_briggs_edit)
         
-        self.enneagram_value = QLabel()
-        psych_layout.addRow("Enneagram:", self.enneagram_value)
+        self.enneagram_edit = QLineEdit()
+        self.enneagram_edit.setPlaceholderText("e.g., Type 4w5")
+        psych_layout.addRow("Enneagram:", self.enneagram_edit)
         
         self.wounds_value = QTextEdit()
-        self.wounds_value.setReadOnly(True)
         self.wounds_value.setMaximumHeight(80)
+        self.wounds_value.setPlaceholderText("Emotional wounds, traumas, fears...")
         psych_layout.addRow("Wounds:", self.wounds_value)
         
         self.psychology_group.setLayout(psych_layout)
         self.content_layout.addWidget(self.psychology_group)
+        
+        # Add save/cancel buttons
+        self._create_action_buttons()
     
-    def load_character(self, character_id: int) -> None:
+    def _create_action_buttons(self) -> None:
+        """Create save/revert buttons at the bottom."""
+        button_widget = QWidget()
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        self.save_btn = QPushButton("💾 Save Changes")
+        self.save_btn.clicked.connect(self._on_save_changes)
+        self.save_btn.setEnabled(False)  # Disabled until changes are made
+        button_layout.addWidget(self.save_btn)
+        
+        self.revert_btn = QPushButton("↺ Revert")
+        self.revert_btn.clicked.connect(self._on_revert_changes)
+        self.revert_btn.setEnabled(False)  # Disabled until changes are made
+        button_layout.addWidget(self.revert_btn)
+        
+        button_widget.setLayout(button_layout)
+        self.content_layout.addWidget(button_widget)
+        
+        # Track changes for all editable fields
+        self.title_edit.textChanged.connect(self._on_field_changed)
+        self.nickname_edit.textChanged.connect(self._on_field_changed)
+        self.gender_edit.textChanged.connect(self._on_field_changed)
+        self.ethnicity_edit.textChanged.connect(self._on_field_changed)
+        self.nationality_edit.textChanged.connect(self._on_field_changed)
+        self.religion_edit.textChanged.connect(self._on_field_changed)
+        self.occupation_edit.textChanged.connect(self._on_field_changed)
+        self.education_edit.textChanged.connect(self._on_field_changed)
+        self.marital_edit.textChanged.connect(self._on_field_changed)
+        self.dob_edit.textChanged.connect(self._on_field_changed)
+        self.dod_edit.textChanged.connect(self._on_field_changed)
+        self.myers_briggs_edit.textChanged.connect(self._on_field_changed)
+        self.enneagram_edit.textChanged.connect(self._on_field_changed)
+        self.wounds_value.textChanged.connect(self._on_field_changed)
+    
+    def _on_field_changed(self) -> None:
+        """Enable save/revert buttons when fields change."""
+        self.save_btn.setEnabled(True)
+        self.revert_btn.setEnabled(True)
+    
+    def _on_save_changes(self) -> None:
+        """Save all field changes to database."""
+        if not self.current_character:
+            return
+        
+        try:
+            # Collect all field values
+            updates = {
+                'title': self.title_edit.text().strip() or None,
+                'nickname': self.nickname_edit.text().strip() or None,
+                'physical_description': self.physical_value.toPlainText().strip() or None,
+                'gender': self.gender_edit.text().strip() or None,
+                'ethnicity': self.ethnicity_edit.text().strip() or None,
+                'nationality': self.nationality_edit.text().strip() or None,
+                'religion': self.religion_edit.text().strip() or None,
+                'occupation': self.occupation_edit.text().strip() or None,
+                'education': self.education_edit.text().strip() or None,
+                'marital_status': self.marital_edit.text().strip() or None,
+                'date_of_birth': self.dob_edit.text().strip() or None,
+                'date_of_death': self.dod_edit.text().strip() or None,
+                'myers_briggs': self.myers_briggs_edit.text().strip() or None,
+                'enneagram': self.enneagram_edit.text().strip() or None,
+                'wounds': self.wounds_value.toPlainText().strip() or None,
+            }
+            
+            # Update character
+            self.app_context.character_service.update_character(
+                self.current_character.id,
+                **updates
+            )
+            self.app_context.commit()
+            
+            # Reload character to update full name display and ensure consistency
+            updated_char = self.app_context.character_service.get_character(self.current_character.id)
+            if updated_char:
+                self.load_character(updated_char)
+            
+            # Disable save/revert buttons
+            self.save_btn.setEnabled(False)
+            self.revert_btn.setEnabled(False)
+            
+            # Notify other widgets
+            self.character_updated.emit()
+            
+        except Exception as e:
+            self.app_context.rollback()
+            QMessageBox.warning(self, "Save Error", f"Failed to save changes: {e}")
+    
+    def _on_revert_changes(self) -> None:
+        """Revert all field changes to original values."""
+        if self.current_character:
+            self._populate_fields()
+            self.save_btn.setEnabled(False)
+            self.revert_btn.setEnabled(False)
+    
+    def load_character(self, character: 'Character') -> None:
         """Load and display a character."""
-        character = self.app_context.character_service.get_character(character_id)
         if character:
             self.current_character = character
             self._populate_fields()
@@ -409,34 +524,118 @@ class CharacterProfileWidget(QWidget):
         else:
             self.image_label.setText("No portrait yet\n\nClick 'Generate Portrait'\nto create one")
         
+        # Disconnect all change signals during population (safely ignore if not connected)
+        try:
+            self.title_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.nickname_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.physical_value.textChanged.disconnect(self._on_physical_description_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.physical_value.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.gender_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.ethnicity_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.nationality_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.religion_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.occupation_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.education_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.marital_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.dob_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.dod_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.myers_briggs_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.enneagram_edit.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        try:
+            self.wounds_value.textChanged.disconnect(self._on_field_changed)
+        except RuntimeError:
+            pass
+        
         # Basic info
-        self.title_value.setText(char.title or "—")
+        self.title_edit.setText(char.title or "")
         full_name = " ".join(filter(None, [char.first_name, char.middle_names, char.last_name]))
         self.full_name_value.setText(full_name or "—")
-        self.nickname_value.setText(char.nickname or "—")
-        
-        # Temporarily disconnect signal to avoid triggering auto-save during load
-        self.physical_value.textChanged.disconnect(self._on_physical_description_changed)
+        self.nickname_edit.setText(char.nickname or "")
         self.physical_value.setPlainText(char.physical_description or "")
-        self.physical_value.textChanged.connect(self._on_physical_description_changed)
         
         # Identity
-        self.gender_value.setText(char.gender or "—")
-        self.ethnicity_value.setText(char.ethnicity or "—")
-        self.nationality_value.setText(char.nationality or "—")
-        self.religion_value.setText(char.religion or "—")
+        self.gender_edit.setText(char.gender or "")
+        self.ethnicity_edit.setText(char.ethnicity or "")
+        self.nationality_edit.setText(char.nationality or "")
+        self.religion_edit.setText(char.religion or "")
         
         # Life
-        self.occupation_value.setText(char.occupation or "—")
-        self.education_value.setText(char.education or "—")
-        self.marital_value.setText(char.marital_status or "—")
-        self.dob_value.setText(str(char.date_of_birth) if char.date_of_birth else "—")
-        self.dod_value.setText(str(char.date_of_death) if char.date_of_death else "—")
+        self.occupation_edit.setText(char.occupation or "")
+        self.education_edit.setText(char.education or "")
+        self.marital_edit.setText(char.marital_status or "")
+        self.dob_edit.setText(str(char.date_of_birth) if char.date_of_birth else "")
+        self.dod_edit.setText(str(char.date_of_death) if char.date_of_death else "")
         
         # Psychology
-        self.myers_briggs_value.setText(char.myers_briggs or "—")
-        self.enneagram_value.setText(char.enneagram or "—")
-        self.wounds_value.setPlainText(char.wounds or "No wounds recorded")
+        self.myers_briggs_edit.setText(char.myers_briggs or "")
+        self.enneagram_edit.setText(char.enneagram or "")
+        self.wounds_value.setPlainText(char.wounds or "")
+        
+        # Reconnect all change signals
+        self.title_edit.textChanged.connect(self._on_field_changed)
+        self.nickname_edit.textChanged.connect(self._on_field_changed)
+        self.physical_value.textChanged.connect(self._on_physical_description_changed)
+        self.physical_value.textChanged.connect(self._on_field_changed)
+        self.gender_edit.textChanged.connect(self._on_field_changed)
+        self.ethnicity_edit.textChanged.connect(self._on_field_changed)
+        self.nationality_edit.textChanged.connect(self._on_field_changed)
+        self.religion_edit.textChanged.connect(self._on_field_changed)
+        self.occupation_edit.textChanged.connect(self._on_field_changed)
+        self.education_edit.textChanged.connect(self._on_field_changed)
+        self.marital_edit.textChanged.connect(self._on_field_changed)
+        self.dob_edit.textChanged.connect(self._on_field_changed)
+        self.dod_edit.textChanged.connect(self._on_field_changed)
+        self.myers_briggs_edit.textChanged.connect(self._on_field_changed)
+        self.enneagram_edit.textChanged.connect(self._on_field_changed)
+        self.wounds_value.textChanged.connect(self._on_field_changed)
+        
+        # Disable save/revert buttons after population
+        self.save_btn.setEnabled(False)
+        self.revert_btn.setEnabled(False)
     
     def _set_visibility(self, visible: bool) -> None:
         """Show or hide all content sections."""
@@ -507,7 +706,9 @@ class CharacterProfileWidget(QWidget):
         )
         if dialog.exec():
             # Reload the character to show updated data
-            self.load_character(self.current_character.id)
+            updated_char = self.app_context.character_service.get_character(self.current_character.id)
+            if updated_char:
+                self.load_character(updated_char)
             self.character_updated.emit()
     
     def _on_delete_character(self) -> None:
@@ -583,18 +784,23 @@ class CharacterProfileWidget(QWidget):
             return None
     
     def _on_dimension_preset_changed(self, preset_text: str) -> None:
-        """Handle dimension preset selection."""
+        """Handle dimension preset selection.
+        
+        Uses SDXL-trained resolutions for optimal quality.
+        """
         presets = {
-            "1024x1024 (Square)": (1024, 1024),
-            "1536x1024 (Landscape 3:2)": (1536, 1024),
-            "1920x1080 (Landscape 16:9)": (1920, 1080),
-            "1280x720 (Landscape HD)": (1280, 720),
-            "1024x1536 (Portrait 2:3)": (1024, 1536),
-            "1080x1920 (Portrait 9:16)": (1080, 1920),
-            "720x1280 (Portrait HD)": (720, 1280),
+            "Square 1024×1024": (1024, 1024),
+            "Portrait 832×1216": (832, 1216),
+            "Portrait 896×1152": (896, 1152),
+            "Landscape 1216×832": (1216, 832),
+            "Landscape 1152×896": (1152, 896),
+            "Wide 1344×768": (1344, 768),
+            "Wide 1536×640": (1536, 640),
+            "Tall 768×1344": (768, 1344),
+            "Tall 640×1536": (640, 1536),
         }
         
-        if preset_text == "Custom...":
+        if preset_text == "Custom":
             # Enable custom dimension spinboxes
             self.width_spin.setEnabled(True)
             self.height_spin.setEnabled(True)
@@ -900,3 +1106,24 @@ class CharacterProfileWidget(QWidget):
         )
         self.image_label.clear()
         self.image_label.setText("No portrait yet\n\nClick 'Generate'\nto create one")
+    
+    def _on_portrait_clicked(self, event) -> None:
+        """Handle click on portrait image to view in system viewer."""
+        if not self.current_character or not self.current_character.image_path:
+            return
+        
+        from pathlib import Path
+        image_path = Path(self.current_character.image_path)
+        
+        if not image_path.exists():
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                f"Portrait file not found:\n{image_path}"
+            )
+            return
+        
+        # Open with system default application
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(image_path.absolute())))

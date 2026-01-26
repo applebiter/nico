@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
     QScrollArea,
+    QCheckBox,
 )
 
 from nico.domain.models import Project, Story, Chapter, Scene

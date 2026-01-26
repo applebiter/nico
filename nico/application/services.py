@@ -330,12 +330,70 @@ class MediaService:
         return [att.media for att in attachments]
     
     def detach_media_from_entity(self, attachment_id: int) -> bool:
-        """Remove a media attachment."""
+        """Remove a media attachment and clean up orphaned media.
+        
+        If the media has no other attachments after this one is removed,
+        delete the media from both the database and filesystem.
+        """
+        from pathlib import Path
+        
         attachment = self.session.query(MediaAttachment).filter(
             MediaAttachment.id == attachment_id
         ).first()
-        if attachment:
-            self.session.delete(attachment)
-            self.session.commit()
-            return True
-        return False
+        
+        if not attachment:
+            return False
+        
+        # Get the media and check for other attachments
+        media = attachment.media
+        media_id = attachment.media_id
+        
+        # Delete this attachment
+        self.session.delete(attachment)
+        self.session.flush()  # Flush to ensure attachment is removed before counting
+        
+        # Count remaining attachments for this media
+        remaining_attachments = self.session.query(MediaAttachment).filter(
+            MediaAttachment.media_id == media_id
+        ).count()
+        
+        # If no other attachments exist, delete the media and its files
+        if remaining_attachments == 0:
+            # Delete filesystem files
+            if media.file_path:
+                file_path = Path(media.file_path)
+                if file_path.exists():
+                    try:
+                        file_path.unlink()
+                        print(f"Deleted orphaned media file: {file_path}")
+                    except Exception as e:
+                        print(f"Warning: Could not delete media file {file_path}: {e}")
+            
+            # Delete thumbnail if it exists
+            if media.thumbnail_path:
+                thumb_path = Path(media.thumbnail_path)
+                if thumb_path.exists():
+                    try:
+                        thumb_path.unlink()
+                        print(f"Deleted orphaned thumbnail: {thumb_path}")
+                    except Exception as e:
+                        print(f"Warning: Could not delete thumbnail {thumb_path}: {e}")
+            
+            # Delete the media directory if it exists (media/{media_id}/)
+            if media.file_path:
+                media_dir = Path(media.file_path).parent
+                if media_dir.exists() and media_dir.name.isdigit():
+                    try:
+                        # Remove directory and any remaining files
+                        import shutil
+                        shutil.rmtree(media_dir)
+                        print(f"Deleted orphaned media directory: {media_dir}")
+                    except Exception as e:
+                        print(f"Warning: Could not delete media directory {media_dir}: {e}")
+            
+            # Delete media from database
+            self.session.delete(media)
+            print(f"Deleted orphaned media record: {media.original_filename} (ID: {media_id})")
+        
+        self.session.commit()
+        return True

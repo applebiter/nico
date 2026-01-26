@@ -2,7 +2,7 @@
 from typing import Optional
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QMessageBox,
     QStackedWidget,
+    QMenu,
 )
 
 from nico.domain.models import (
@@ -416,6 +417,13 @@ class InspectorWidget(QWidget):
         
         self.media_list = QListWidget()
         self.media_list.setMaximumHeight(150)
+        self.media_list.setViewMode(QListWidget.ViewMode.IconMode)
+        self.media_list.setIconSize(QSize(64, 64))
+        self.media_list.setSpacing(8)
+        self.media_list.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.media_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.media_list.customContextMenuRequested.connect(self._on_media_context_menu)
+        self.media_list.itemDoubleClicked.connect(self._on_media_double_clicked)
         media_layout.addWidget(self.media_list)
         
         # Buttons for media management
@@ -729,15 +737,30 @@ class InspectorWidget(QWidget):
         try:
             media_items = self.app_context.media_service.get_entity_media('character', character.id)
             for media in media_items:
-                icon_map = {
-                    "image": "🖼️",
-                    "audio": "🎵",
-                    "video": "🎬",
-                }
-                icon = icon_map.get(media.media_type, "📄")
-                display_text = f"{icon} {media.get_display_title()}"
+                display_text = media.title or media.original_filename
                 item = QListWidgetItem(display_text)
                 item.setData(Qt.ItemDataRole.UserRole, media.id)
+                
+                # Add thumbnail for images
+                if media.media_type == 'image':
+                    from pathlib import Path
+                    from PySide6.QtGui import QPixmap, QIcon
+                    
+                    # Try thumbnail first, then original
+                    thumb_path = Path(media.thumbnail_path) if media.thumbnail_path else None
+                    img_path = Path(media.file_path) if not thumb_path or not thumb_path.exists() else thumb_path
+                    
+                    if img_path and img_path.exists():
+                        pixmap = QPixmap(str(img_path))
+                        if not pixmap.isNull():
+                            # Scale to thumbnail size
+                            scaled = pixmap.scaled(
+                                64, 64,
+                                Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.SmoothTransformation
+                            )
+                            item.setIcon(QIcon(scaled))
+                
                 self.media_list.addItem(item)
         except Exception as e:
             print(f"Failed to load media: {e}")
@@ -1185,17 +1208,83 @@ class InspectorWidget(QWidget):
                     f"Failed to detach media: {str(e)}"
                 )
     
+    def _on_media_context_menu(self, position) -> None:
+        """Show context menu for media item."""
+        if not isinstance(self.current_context, Character):
+            return
+        
+        item = self.media_list.itemAt(position)
+        if not item:
+            return
+        
+        menu = QMenu(self)
+        
+        view_action = menu.addAction("👁️ View")
+        view_action.triggered.connect(lambda: self._on_view_media(item))
+        
+        menu.addSeparator()
+        
+        detach_action = menu.addAction("✂️ Detach")
+        detach_action.triggered.connect(self._on_detach_media)
+        
+        menu.exec(self.media_list.mapToGlobal(position))
+    
+    def _on_media_double_clicked(self, item) -> None:
+        """View media on double-click."""
+        self._on_view_media(item)
+    
+    def _on_view_media(self, item) -> None:
+        """View the selected media item."""
+        if not item:
+            return
+        
+        media_id = item.data(Qt.ItemDataRole.UserRole)
+        if not media_id:
+            return
+        
+        # Get the media
+        from nico.domain.models import Media
+        media = self.app_context._session.query(Media).filter(
+            Media.id == media_id
+        ).first()
+        
+        if not media:
+            return
+        
+        from pathlib import Path
+        media_path = Path(media.file_path)
+        
+        if not media_path.exists():
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                f"Media file not found:\n{media_path}"
+            )
+            return
+        
+        # Open with system default application
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(media_path.absolute())))
+    
     def _on_attach_media_generic(self, entity_type: str):
         """Attach media to the current entity (generic handler for all entity types)."""
         if not self.current_context:
             return
         
-        # Map entity type to attribute name for project_id
+        # Determine project_id based on entity hierarchy
         project_id = None
-        if hasattr(self.current_context, 'project_id'):
-            project_id = self.current_context.project_id
-        elif hasattr(self.current_context, 'id') and entity_type == 'project':
+        if entity_type == 'project':
             project_id = self.current_context.id
+        elif hasattr(self.current_context, 'project_id'):
+            # Story has direct project_id
+            project_id = self.current_context.project_id
+        elif entity_type == 'chapter' and hasattr(self.current_context, 'story'):
+            # Chapter -> Story -> Project
+            project_id = self.current_context.story.project_id
+        elif entity_type == 'scene' and hasattr(self.current_context, 'chapter'):
+            # Scene -> Chapter -> Story -> Project
+            project_id = self.current_context.chapter.story.project_id
         
         if not project_id:
             QMessageBox.warning(self, "Error", "Cannot determine project for media attachment.")

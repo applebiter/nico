@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 )
 
 from nico.domain.models import Scene, Project, Story, Chapter, Character, Location, Event
+from nico.application.context import get_app_context
 from nico.presentation.widgets.project_overview import ProjectOverview
 from nico.presentation.widgets.story_overview import StoryOverview
 from nico.presentation.widgets.stories_overview import StoriesOverview
@@ -29,6 +30,7 @@ class EditorWidget(QWidget):
     
     def __init__(self) -> None:
         super().__init__()
+        self.app_context = get_app_context()
         self._setup_ui()
         
     def _setup_ui(self) -> None:
@@ -106,8 +108,10 @@ class EditorWidget(QWidget):
     
     def show_character(self, character_id: int) -> None:
         """Display character profile."""
-        self.character_profile.load_character(character_id)
-        self.stack.setCurrentWidget(self.character_profile)
+        character = self.app_context.character_service.get_character(character_id)
+        if character:
+            self.character_profile.load_character(character)
+            self.stack.setCurrentWidget(self.character_profile)
     
     def show_characters_overview(self, project: Project) -> None:
         """Display characters overview for a project."""

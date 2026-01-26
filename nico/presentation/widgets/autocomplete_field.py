@@ -4,6 +4,7 @@ from PySide6.QtCore import QTimer, Signal, Qt, QStringListModel
 from PySide6.QtGui import QTextCursor
 import asyncio
 from typing import Optional, Dict, Any
+from nico.preferences import get_preferences
 
 
 class AutocompleteLineEdit(QLineEdit):
@@ -39,6 +40,10 @@ class AutocompleteLineEdit(QLineEdit):
     
     def _on_text_changed(self, text: str):
         """Handle text changes with debouncing."""
+        # Check if autocomplete is enabled
+        if not get_preferences().autocomplete_enabled:
+            return
+        
         # Only trigger if text is growing and substantial
         if len(text) >= 3 and len(text) > len(self._last_text):
             self._suggestion_timer.start(self._debounce_ms)
@@ -105,6 +110,10 @@ class AutocompleteTextEdit(QTextEdit):
     
     def _on_text_changed(self):
         """Handle text changes with debouncing."""
+        # Check if autocomplete is enabled
+        if not get_preferences().autocomplete_enabled:
+            return
+        
         text = self.toPlainText()
         
         # Only trigger if text is growing
@@ -211,25 +220,33 @@ class AutocompleteManager:
         context: Optional[Dict[str, Any]]
     ):
         """Handle autocomplete request asynchronously."""
-        # Create async task
-        loop = asyncio.get_event_loop()
-        task = loop.create_task(
-            self._fetch_and_show(field, field_type, current_text, context)
-        )
-        self._pending_requests[id(field)] = task
-    
-    async def _fetch_and_show(
-        self,
-        field,
-        field_type: str,
-        current_text: str,
-        context: Optional[Dict[str, Any]]
-    ):
-        """Fetch suggestion and show it."""
-        suggestion = await self.get_suggestion(field_type, current_text, context)
-        if suggestion:
-            # Update UI in main thread
-            field.show_suggestion(suggestion)
+        # Use QTimer to run async task without blocking UI
+        from PySide6.QtCore import QTimer
         
-        # Clean up
-        self._pending_requests.pop(id(field), None)
+        def run_async():
+            import asyncio
+            try:
+                # Create new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                # Run the async function
+                suggestion = loop.run_until_complete(
+                    self.get_suggestion(field_type, current_text, context)
+                )
+                
+                # Show suggestion in UI thread
+                if suggestion:
+                    field.show_suggestion(suggestion)
+                    
+            except Exception as e:
+                print(f"Autocomplete error: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                loop.close()
+        
+        # Run in separate thread to avoid blocking UI
+        from threading import Thread
+        thread = Thread(target=run_async, daemon=True)
+        thread.start()

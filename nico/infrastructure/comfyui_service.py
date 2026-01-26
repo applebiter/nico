@@ -62,29 +62,21 @@ class ComfyUIService:
         
         return workflow
     
-    async def generate_image(
+    async def execute_workflow(
         self,
-        prompt: str,
-        width: int = 1024,
-        height: int = 1024,
-        seed: Optional[int] = None,
+        workflow: Dict[str, Any],
         timeout: int = 120
     ) -> Optional[Path]:
         """
-        Generate an image using ComfyUI.
+        Execute a pre-built workflow on ComfyUI.
         
         Args:
-            prompt: The text description of the image to generate
-            width: Image width in pixels
-            height: Image height in pixels
-            seed: Random seed for reproducibility (optional)
+            workflow: The workflow dictionary to execute
             timeout: Maximum time to wait for generation in seconds
             
         Returns:
             Path to the generated image file, or None if generation failed
         """
-        workflow = self._prepare_workflow(prompt, width, height, seed)
-        
         async with aiohttp.ClientSession() as session:
             try:
                 # Queue the prompt
@@ -115,6 +107,32 @@ class ComfyUIService:
             except Exception as e:
                 print(f"Unexpected error: {e}")
                 return None
+    
+    async def generate_image(
+        self,
+        prompt: str,
+        width: int = 1024,
+        height: int = 1024,
+        seed: Optional[int] = None,
+        timeout: int = 120
+    ) -> Optional[Path]:
+        """
+        Generate an image using ComfyUI.
+        
+        Args:
+            prompt: The text description of the image to generate
+            width: Image width in pixels
+            height: Image height in pixels
+            seed: Random seed for reproducibility (optional)
+            timeout: Maximum time to wait for generation in seconds
+            
+        Returns:
+            Path to the generated image file, or None if generation failed
+        """
+        workflow = self._prepare_workflow(prompt, width, height, seed)
+        return await self.execute_workflow(workflow, timeout)
+                    
+
     
     async def _wait_for_completion(
         self,

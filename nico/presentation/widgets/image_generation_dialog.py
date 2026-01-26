@@ -1,7 +1,10 @@
 """Image generation dialog for creating images for any entity type."""
 import asyncio
+import json
 from pathlib import Path
 from typing import Optional
+
+from PIL import Image
 
 from PySide6.QtCore import Qt, Signal, QThread, QObject
 from PySide6.QtWidgets import (
@@ -29,6 +32,8 @@ from PySide6.QtGui import QPixmap
 from nico.application.context import AppContext
 from nico.infrastructure.comfyui_service import get_comfyui_service
 from nico.infrastructure.style_transfer_workflow import StyleTransferWorkflow
+from nico.infrastructure.topaz_enhance_workflow import TopazEnhanceWorkflow
+from nico.presentation.widgets.upscale_dialog import UpscaleDialog
 
 
 class ImageGenerationWorker(QObject):
@@ -36,13 +41,14 @@ class ImageGenerationWorker(QObject):
     finished = Signal(object)  # image_path or None
     error = Signal(str)  # error message
     
-    def __init__(self, prompt: str, project_path: Path, width: int = 1024, height: int = 1024, seed: int = None):
+    def __init__(self, project_path: Path, prompt: str = None, width: int = 1024, height: int = 1024, seed: int = None, workflow: dict = None):
         super().__init__()
-        self.prompt = prompt
         self.project_path = project_path
+        self.prompt = prompt
         self.width = width
         self.height = height
         self.seed = seed
+        self.workflow = workflow  # Pre-built workflow (for style transfer)
     
     def run(self):
         """Generate image using ComfyUI."""
@@ -51,11 +57,20 @@ class ImageGenerationWorker(QObject):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
-            # Get ComfyUI service and generate image
+            # Get ComfyUI service
             comfyui = get_comfyui_service(project_path=self.project_path)
-            image_path = loop.run_until_complete(
-                comfyui.generate_image(self.prompt, width=self.width, height=self.height, seed=self.seed)
-            )
+            
+            # Execute workflow or generate simple image
+            if self.workflow:
+                # Execute pre-built workflow (e.g., style transfer)
+                image_path = loop.run_until_complete(
+                    comfyui.execute_workflow(self.workflow)
+                )
+            else:
+                # Generate simple image from prompt
+                image_path = loop.run_until_complete(
+                    comfyui.generate_image(self.prompt, width=self.width, height=self.height, seed=self.seed)
+                )
             
             loop.close()
             
@@ -88,16 +103,22 @@ class ImageGenerationDialog(QDialog):
         self.generated_image_path: Optional[Path] = None
         self.generated_prompt: Optional[str] = None
         self.style_workflow = StyleTransferWorkflow()
+        self.topaz_workflow = TopazEnhanceWorkflow()
         
         self.setWindowTitle("✨ Generate Image")
-        self.setMinimumWidth(700)
+        self.setMinimumWidth(1100)
         self.setMinimumHeight(750)
         
         self._setup_ui(initial_prompt)
     
     def _setup_ui(self, initial_prompt: str) -> None:
         """Set up the dialog layout."""
-        layout = QVBoxLayout()
+        # Main horizontal layout: controls on left, preview on right
+        main_layout = QHBoxLayout()
+        
+        # Left panel: all controls
+        left_panel = QWidget()
+        left_layout = QVBoxLayout()
         
         # Instructions
         info_label = QLabel(
@@ -106,33 +127,20 @@ class ImageGenerationDialog(QDialog):
         )
         info_label.setWordWrap(True)
         info_label.setStyleSheet("color: #666; font-size: 11px;")
-        layout.addWidget(info_label)
+        left_layout.addWidget(info_label)
         
         # Tab widget for Simple vs Style Transfer
         self.tabs = QTabWidget()
         self.tabs.addTab(self._create_simple_tab(initial_prompt), "🎨 Simple Generation")
         self.tabs.addTab(self._create_style_transfer_tab(initial_prompt), "🖼️ Style Transfer")
-        layout.addWidget(self.tabs)
-        layout.addWidget(self.tabs)
-        
-        # Preview area
-        preview_group = QGroupBox("Preview")
-        preview_layout = QVBoxLayout()
-        
-        self.preview_label = QLabel("Generated image will appear here")
-        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_label.setMinimumHeight(200)
-        self.preview_label.setStyleSheet("border: 1px solid #ccc; background: #f5f5f5;")
-        preview_layout.addWidget(self.preview_label)
-        
-        preview_group.setLayout(preview_layout)
-        layout.addWidget(preview_group)
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        left_layout.addWidget(self.tabs)
         
         # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # Indeterminate
         self.progress_bar.hide()
-        layout.addWidget(self.progress_bar)
+        left_layout.addWidget(self.progress_bar)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -153,9 +161,40 @@ class ImageGenerationDialog(QDialog):
         self.accept_btn.setEnabled(False)
         button_layout.addWidget(self.accept_btn)
         
-        layout.addLayout(button_layout)
+        left_layout.addLayout(button_layout)
+        left_panel.setLayout(left_layout)
         
-        self.setLayout(layout)
+        # Right panel: preview
+        right_panel = QWidget()
+        right_layout = QVBoxLayout()
+        
+        preview_group = QGroupBox("Preview")
+        preview_layout = QVBoxLayout()
+        
+        self.preview_label = QLabel("Generated image will appear here")
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview_label.setMinimumSize(400, 400)
+        self.preview_label.setStyleSheet("border: 1px solid #ccc; background: #f5f5f5;")
+        preview_layout.addWidget(self.preview_label)
+        
+        # Export button (hidden until image generated)
+        self.export_fhd_btn = QPushButton("� Upscale")
+        self.export_fhd_btn.setToolTip("Upscale and enhance the generated image")
+        self.export_fhd_btn.clicked.connect(self._export_to_fhd)
+        self.export_fhd_btn.hide()
+        preview_layout.addWidget(self.export_fhd_btn)
+        
+        preview_group.setLayout(preview_layout)
+        right_layout.addWidget(preview_group)
+        right_layout.addStretch()
+        right_panel.setLayout(right_layout)
+        right_panel.setMinimumWidth(420)
+        
+        # Add panels to main layout
+        main_layout.addWidget(left_panel, stretch=1)
+        main_layout.addWidget(right_panel, stretch=0)
+        
+        self.setLayout(main_layout)
     
     def _create_simple_tab(self, initial_prompt: str) -> QWidget:
         """Create the simple generation tab."""
@@ -196,9 +235,13 @@ class ImageGenerationDialog(QDialog):
         self.dimension_preset.addItems([
             "Square 1024×1024",
             "Portrait 832×1216",
+            "Portrait 896×1152",
             "Landscape 1216×832",
+            "Landscape 1152×896",
             "Wide 1344×768",
+            "Wide 1536×640",
             "Tall 768×1344",
+            "Tall 640×1536",
             "Custom"
         ])
         self.dimension_preset.currentTextChanged.connect(self._on_preset_changed)
@@ -332,6 +375,26 @@ class ImageGenerationDialog(QDialog):
         
         style_settings_layout.addRow("Style Strength:", strength_layout)
         
+        # Dimension preset
+        preset_layout = QHBoxLayout()
+        self.style_dimension_preset = QComboBox()
+        self.style_dimension_preset.addItems([
+            "Square 1024×1024",
+            "Portrait 832×1216",
+            "Portrait 896×1152",
+            "Landscape 1216×832",
+            "Landscape 1152×896",
+            "Wide 1344×768",
+            "Wide 1536×640",
+            "Tall 768×1344",
+            "Tall 640×1536",
+            "Custom"
+        ])
+        self.style_dimension_preset.currentTextChanged.connect(self._on_style_preset_changed)
+        preset_layout.addWidget(self.style_dimension_preset)
+        preset_layout.addStretch()
+        style_settings_layout.addRow("Preset:", preset_layout)
+        
         # Dimensions
         dims_layout = QHBoxLayout()
         self.style_width_spin = QSpinBox()
@@ -339,6 +402,7 @@ class ImageGenerationDialog(QDialog):
         self.style_width_spin.setMaximum(2048)
         self.style_width_spin.setSingleStep(64)
         self.style_width_spin.setValue(1024)
+        self.style_width_spin.setEnabled(False)  # Disabled by default (use preset)
         dims_layout.addWidget(QLabel("W:"))
         dims_layout.addWidget(self.style_width_spin)
         
@@ -347,6 +411,7 @@ class ImageGenerationDialog(QDialog):
         self.style_height_spin.setMaximum(2048)
         self.style_height_spin.setSingleStep(64)
         self.style_height_spin.setValue(1024)
+        self.style_height_spin.setEnabled(False)  # Disabled by default (use preset)
         dims_layout.addWidget(QLabel("H:"))
         dims_layout.addWidget(self.style_height_spin)
         dims_layout.addStretch()
@@ -356,19 +421,30 @@ class ImageGenerationDialog(QDialog):
         style_settings_group.setLayout(style_settings_layout)
         layout.addWidget(style_settings_group)
         
-        layout.addStretch()
-        
         widget.setLayout(layout)
         return widget
     
+    def _on_tab_changed(self, index: int) -> None:
+        """Handle tab change to adjust dialog height if needed."""
+        # With side-by-side layout, both tabs can use same height
+        pass
+    
     def _on_preset_changed(self, preset: str) -> None:
-        """Handle dimension preset change."""
+        """Handle dimension preset change.
+        
+        Uses SDXL-trained resolutions for optimal quality:
+        https://comfyanonymous.github.io/ComfyUI_examples/sdxl/
+        """
         presets = {
             "Square 1024×1024": (1024, 1024),
             "Portrait 832×1216": (832, 1216),
+            "Portrait 896×1152": (896, 1152),
             "Landscape 1216×832": (1216, 832),
+            "Landscape 1152×896": (1152, 896),
             "Wide 1344×768": (1344, 768),
+            "Wide 1536×640": (1536, 640),
             "Tall 768×1344": (768, 1344),
+            "Tall 640×1536": (640, 1536),
         }
         
         if preset in presets:
@@ -380,6 +456,33 @@ class ImageGenerationDialog(QDialog):
         else:  # Custom
             self.width_spin.setEnabled(True)
             self.height_spin.setEnabled(True)
+    
+    def _on_style_preset_changed(self, preset: str) -> None:
+        """Handle style transfer dimension preset change.
+        
+        Uses SDXL-trained resolutions for optimal quality.
+        """
+        presets = {
+            "Square 1024×1024": (1024, 1024),
+            "Portrait 832×1216": (832, 1216),
+            "Portrait 896×1152": (896, 1152),
+            "Landscape 1216×832": (1216, 832),
+            "Landscape 1152×896": (1152, 896),
+            "Wide 1344×768": (1344, 768),
+            "Wide 1536×640": (1536, 640),
+            "Tall 768×1344": (768, 1344),
+            "Tall 640×1536": (640, 1536),
+        }
+        
+        if preset in presets:
+            width, height = presets[preset]
+            self.style_width_spin.setValue(width)
+            self.style_height_spin.setValue(height)
+            self.style_width_spin.setEnabled(False)
+            self.style_height_spin.setEnabled(False)
+        else:  # Custom
+            self.style_width_spin.setEnabled(True)
+            self.style_height_spin.setEnabled(True)
     
     def _browse_reference(self, ref_num: int) -> None:
         """Browse for a reference image."""
@@ -479,7 +582,7 @@ class ImageGenerationDialog(QDialog):
                     description = entity.summary
             
             elif self.entity_type in ('project', 'story', 'chapter'):
-                # Get summary from meta
+                # Get description from entity attributes
                 model_map = {
                     'project': 'Project',
                     'story': 'Story',
@@ -490,8 +593,13 @@ class ImageGenerationDialog(QDialog):
                 entity = self.app_context._session.query(Model).filter(
                     Model.id == self.entity_id
                 ).first()
-                if entity and entity.meta:
-                    description = entity.meta.get('summary', '') or entity.meta.get('notes', '')
+                if entity:
+                    # Try description attribute first (Project, Story have this)
+                    if hasattr(entity, 'description') and entity.description:
+                        description = entity.description
+                    # Fall back to meta fields if no description
+                    elif entity.meta:
+                        description = entity.meta.get('summary', '') or entity.meta.get('notes', '')
             
             if description:
                 self.prompt_input.setPlainText(description)
@@ -543,7 +651,13 @@ class ImageGenerationDialog(QDialog):
         project_path = Path.cwd()
         
         # Create worker and thread
-        self.worker = ImageGenerationWorker(prompt, project_path, width, height, seed)
+        self.worker = ImageGenerationWorker(
+            project_path=project_path,
+            prompt=prompt,
+            width=width,
+            height=height,
+            seed=seed
+        )
         self.thread = QThread()
         
         # Move worker to thread
@@ -598,6 +712,17 @@ class ImageGenerationDialog(QDialog):
         width = self.style_width_spin.value()
         height = self.style_height_spin.value()
         
+        # Disable controls
+        self.generate_btn.setEnabled(False)
+        self.style_prompt_input.setEnabled(False)
+        self.ref1_input.setEnabled(False)
+        self.ref2_input.setEnabled(False)
+        self.style_strength_spin.setEnabled(False)
+        self.style_dimension_preset.setEnabled(False)
+        
+        # Show progress
+        self.progress_bar.show()
+        
         # Generate workflow
         try:
             workflow = self.style_workflow.generate(
@@ -609,23 +734,35 @@ class ImageGenerationDialog(QDialog):
                 height=height
             )
             
-            # For now, show confirmation that workflow is ready
-            # TODO: Integrate with ComfyUI service to actually generate
-            QMessageBox.information(
-                self,
-                "Style Transfer Ready",
-                f"✓ Style transfer workflow generated!\n\n"
-                f"Prompt: {prompt[:60]}...\n"
-                f"Reference 1: {ref1_path.name}\n"
-                f"Reference 2: {ref2_path.name}\n"
-                f"Style Strength: {strength}\n"
-                f"Dimensions: {width}×{height}\n\n"
-                f"🚧 Full ComfyUI integration coming soon!\n\n"
-                f"For now, you can use the Python API:\n"
-                f"See demo_style_transfer.py for examples."
+            # Store prompt for later
+            self.current_prompt = prompt
+            
+            # Get project path
+            project_path = Path.cwd()
+            
+            # Create worker and thread
+            self.worker = ImageGenerationWorker(
+                project_path=project_path,
+                workflow=workflow
             )
+            self.thread = QThread()
+            self.worker.moveToThread(self.thread)
+            
+            # Connect signals
+            self.thread.started.connect(self.worker.run)
+            self.worker.finished.connect(self._on_style_transfer_complete)
+            self.worker.error.connect(self._on_generation_error)
+            self.worker.finished.connect(self.thread.quit)
+            self.worker.error.connect(self.thread.quit)
+            
+            # Start generation
+            self.thread.start()
             
         except Exception as e:
+            # Re-enable controls on error
+            self._enable_style_transfer_controls()
+            self.progress_bar.hide()
+            
             QMessageBox.critical(
                 self,
                 "Workflow Error",
@@ -662,6 +799,9 @@ class ImageGenerationDialog(QDialog):
                 self.generated_image_path = image_path
                 self.generated_prompt = self.prompt_input.toPlainText().strip()
                 self.accept_btn.setEnabled(True)
+                
+                # Show upscale button
+                self.export_fhd_btn.show()
             else:
                 QMessageBox.warning(self, "Error", "Failed to load generated image")
         else:
@@ -691,7 +831,145 @@ class ImageGenerationDialog(QDialog):
             "Generation Error",
             f"Failed to generate image:\n\n{error_msg}\n\n"
             "Make sure ComfyUI is running at http://127.0.0.1:8188"
+        )    
+    def _enable_style_transfer_controls(self) -> None:
+        """Re-enable all style transfer controls."""
+        self.generate_btn.setEnabled(True)
+        self.style_prompt_input.setEnabled(True)
+        self.ref1_input.setEnabled(True)
+        self.ref2_input.setEnabled(True)
+        self.style_strength_spin.setEnabled(True)
+        self.style_dimension_preset.setEnabled(True)
+    
+    def _on_style_transfer_complete(self, image_path) -> None:
+        """Handle successful style transfer generation."""
+        # Re-enable controls
+        self._enable_style_transfer_controls()
+        
+        # Hide progress
+        self.progress_bar.hide()
+        
+        if image_path and image_path.exists():
+            # Display preview
+            pixmap = QPixmap(str(image_path))
+            if not pixmap.isNull():
+                # Scale to fit preview
+                scaled = pixmap.scaled(
+                    400, 400,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                self.preview_label.setPixmap(scaled)
+                
+                # Store for accept
+                self.generated_image_path = image_path
+                self.generated_prompt = self.current_prompt
+                self.accept_btn.setEnabled(True)
+                
+                # Show upscale button
+                self.export_fhd_btn.show()
+            else:
+                QMessageBox.warning(self, "Error", "Failed to load generated image")
+        else:
+            QMessageBox.warning(
+                self,
+                "Generation Failed",
+                "ComfyUI did not return an image. Check the console for details.\n\n"
+                "Make sure ComfyUI is running at http://127.0.0.1:8188"
+            )
+    
+    def _on_generation_error(self, error_msg: str) -> None:
+        """Handle style transfer generation error."""
+        # Re-enable controls
+        self._enable_style_transfer_controls()
+        
+        # Hide progress
+        self.progress_bar.hide()
+        
+        QMessageBox.critical(
+            self,
+            "Generation Failed",
+            f"Error generating image:\n\n{error_msg}\n\n"
+            f"Make sure ComfyUI is running at http://127.0.0.1:8188"
+        )    
+    def _export_to_fhd(self) -> None:
+        """Export the generated image using Topaz enhance with resolution selection."""
+        if not self.generated_image_path or not self.generated_image_path.exists():
+            QMessageBox.warning(self, "No Image", "Please generate an image first.")
+            return
+        
+        # Show upscale dialog to select resolution
+        upscale_dialog = UpscaleDialog(self.generated_image_path, self)
+        if upscale_dialog.exec() != QDialog.DialogCode.Accepted:
+            return  # User cancelled
+        
+        resolution = upscale_dialog.get_selected_resolution()
+        if not resolution:
+            return
+        
+        target_width, target_height = resolution
+        
+        # Ask for save location
+        default_name = f"upscaled_{target_width}x{target_height}_{self.generated_image_path.stem}.png"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Upscaled Image",
+            str(self.generated_image_path.parent / default_name),
+            "PNG Images (*.png);;All Files (*)"
         )
+        
+        if not save_path:
+            return  # User cancelled
+        
+        # Show progress
+        self.export_fhd_btn.setEnabled(False)
+        self.export_fhd_btn.setText("⏳ Upscaling...")
+        self.progress_bar.show()
+        
+        try:
+            # Create enhancement workflow with selected resolution
+            workflow = self.topaz_workflow.enhance(
+                input_image_path=str(self.generated_image_path),
+                output_width=target_width,
+                output_height=target_height,
+                creativity=3,
+                face_enhancement=True
+            )
+            
+            # For now, save the workflow and show info
+            # TODO: Actually queue to ComfyUI and wait for result
+            workflow_save_path = Path(save_path).with_suffix('.json')
+            with open(workflow_save_path, 'w') as f:
+                json.dump(workflow, f, indent=2)
+            
+            QMessageBox.information(
+                self,
+                "Upscale Ready",
+                f"✓ Topaz enhancement workflow created!\n\n"
+                f"Input: {self.generated_image_path.name}\n"
+                f"Output: {target_width}×{target_height}\n"
+                f"Model: Topaz Reimagine\n"
+                f"Creativity: 3/10\n\n"
+                f"Workflow saved to:\n{workflow_save_path}\n\n"
+                f"🚧 Direct ComfyUI execution coming soon!\n\n"
+                f"For now, you can:\n"
+                f"1. Open this workflow in ComfyUI\n"
+                f"2. Load your image in node 2\n"
+                f"3. Click Queue Prompt"
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Upscale Error",
+                f"Failed to create upscale workflow:\n\n{e}"
+            )
+        
+        finally:
+            # Reset button
+            self.export_fhd_btn.setEnabled(True)
+            self.export_fhd_btn.setText("� Upscale")
+            self.progress_bar.hide()
     
     def accept(self) -> None:
         """Handle dialog acceptance."""

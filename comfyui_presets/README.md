@@ -26,6 +26,36 @@ SDXL Revision workflow for style transfer with two reference images.
 - **Use case:** Maintaining visual continuity across generations
 - **Features:** unCLIP conditioning with CLIP Vision encoding
 - **Parameters:** 2 reference images + text prompt + style strength (0.6-0.95)
+- **Recommended resolutions:** Use SDXL-trained dimensions for best quality:
+  - 1024 × 1024 (square)
+  - 1152 × 896 / 896 × 1152 (portrait/landscape)
+  - 1216 × 832 / 832 × 1216 (portrait/landscape)
+  - 1344 × 768 / 768 × 1344 (wide/tall)
+  - 1536 × 640 / 640 × 1536 (ultrawide/ultratall)
+
+## SDXL Resolution Guidelines
+
+SDXL models are trained on specific resolutions for optimal quality. When generating images, use these trained dimensions:
+
+| Aspect Ratio | Resolution | Best For |
+|--------------|------------|----------|
+| 1:1 (Square) | 1024 × 1024 | Portraits, profile images |
+| 4:5 (Portrait) | 832 × 1216 | Character full body |
+| 7:9 (Portrait) | 896 × 1152 | Tall portraits |
+| 5:4 (Landscape) | 1216 × 832 | Scenes, landscapes |
+| 9:7 (Landscape) | 1152 × 896 | Wide scenes |
+| 7:4 (Wide) | 1344 × 768 | Cinematic wide |
+| 12:5 (Wide) | 1536 × 640 | Ultrawide panorama |
+| 4:7 (Tall) | 768 × 1344 | Tall narrow scenes |
+| 5:12 (Tall) | 640 × 1536 | Vertical panorama |
+
+**Why use these specific resolutions?**
+- Better image quality (model was trained on these)
+- More coherent compositions
+- Fewer artifacts and distortions
+- Optimal performance
+
+The GUI presets automatically use these trained resolutions.
 
 ## Adding Custom Workflows
 

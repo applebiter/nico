@@ -25,7 +25,6 @@ from nico.domain.models import Character, WorldBuildingTable
 from nico.application.context import get_app_context
 from nico.presentation.widgets.searchable_combo import SearchableComboBox
 from nico.presentation.widgets.async_search_combo import AsyncSearchComboBox
-from nico.presentation.widgets.autocomplete_field import AutocompleteLineEdit, AutocompleteManager
 
 
 class CharacterDialog(QDialog):
@@ -44,9 +43,6 @@ class CharacterDialog(QDialog):
         
         # Cache for world-building tables
         self._table_cache = {}
-        
-        # Setup autocomplete manager
-        self._autocomplete_manager = AutocompleteManager()
         
         self._setup_ui()
         if self.is_editing:
@@ -209,10 +205,9 @@ class CharacterDialog(QDialog):
         self.nickname_edit.setPlaceholderText("Nickname or preferred name")
         layout.addRow("Nickname:", self.nickname_edit)
         
-        # Physical description with AI autocomplete
-        self.physical_edit = AutocompleteLineEdit(field_type="description", parent=self)
-        self.physical_edit.setPlaceholderText("Physical appearance, distinguishing features... (AI-assisted)")
-        self._autocomplete_manager.connect_field(self.physical_edit, {"genre": "Character Description"})
+        # Physical description
+        self.physical_edit = QLineEdit()
+        self.physical_edit.setPlaceholderText("Physical appearance, distinguishing features...")
         layout.addRow("Physical Description:", self.physical_edit)
         
         # AI exclusion
@@ -564,7 +559,7 @@ class CharacterDialog(QDialog):
             self.last_name_edit.setCurrentText(self.character.last_name or "")
             
         self.nickname_edit.setText(self.character.nickname or "")
-        self.physical_edit.setPlainText(self.character.physical_description or "")
+        self.physical_edit.setText(self.character.physical_description or "")
         self.exclude_ai_checkbox.setChecked(self.character.exclude_from_ai)
         
         # Identity
