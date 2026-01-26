@@ -27,7 +27,7 @@ class ComfyUIService:
         self.project_path = project_path
         
         # Load the workflow template
-        workflow_path = Path(__file__).parent.parent.parent / "image_z_image_turbo.json"
+        workflow_path = Path(__file__).parent.parent.parent / "comfyui_presets" / "image_z_image_turbo.json"
         with open(workflow_path, 'r') as f:
             self.workflow_template = json.load(f)
     

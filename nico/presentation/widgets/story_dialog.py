@@ -184,6 +184,23 @@ class StoryDialog(QDialog):
             elif "[Template:" not in current_desc:
                 self.description_edit.setPlainText(current_desc + template_info)
     
+    def _add_genre_to_table(self, genre: str) -> None:
+        """Add a new genre to the genre table if it doesn't exist."""
+        genre_table = self.app_context._session.query(WorldBuildingTable).filter_by(
+            table_name="what_kind_of_story__).genre"
+        ).first()
+        
+        if genre_table:
+            # Check if genre already exists (case-insensitive)
+            existing_genres_lower = [g.lower() for g in genre_table.items]
+            if genre.lower() not in existing_genres_lower:
+                # Add new genre and sort alphabetically
+                genre_table.items = sorted(genre_table.items + [genre], key=str.lower)
+                # Refresh the combo box
+                self.genre_edit.clear()
+                self.genre_edit.setItems(genre_table.items)
+                self.genre_edit.setText(genre)
+    
     def _load_story_data(self) -> None:
         """Load existing story data into the form."""
         if not self.story:
@@ -230,15 +247,19 @@ class StoryDialog(QDialog):
             "exclude_from_ai": self.exclude_ai_checkbox.isChecked(),
         }
         
-        # Add genre to meta field
+        # Add genre to meta field and update genre table if new
         genre = self.genre_edit.currentText().strip()
         if genre:
+            # Add to story meta
             if self.is_editing and self.story.meta:
                 meta = self.story.meta.copy()
             else:
                 meta = {}
             meta['genre'] = genre
             data['meta'] = meta
+            
+            # Check if genre exists in table, add if new
+            self._add_genre_to_table(genre)
         
         try:
             if self.is_editing:

@@ -25,6 +25,7 @@ from nico.domain.models import Character, WorldBuildingTable
 from nico.application.context import get_app_context
 from nico.presentation.widgets.searchable_combo import SearchableComboBox
 from nico.presentation.widgets.async_search_combo import AsyncSearchComboBox
+from nico.presentation.widgets.autocomplete_field import AutocompleteLineEdit, AutocompleteManager
 
 
 class CharacterDialog(QDialog):
@@ -44,9 +45,15 @@ class CharacterDialog(QDialog):
         # Cache for world-building tables
         self._table_cache = {}
         
+        # Setup autocomplete manager
+        self._autocomplete_manager = AutocompleteManager()
+        
         self._setup_ui()
         if self.is_editing:
             self._load_character_data()
+        else:
+            # Randomize all fields on first load for new characters
+            self._randomize_all_fields()
     
     def _get_table_items(self, table_name: str) -> list[str]:
         """Get items from a world-building table (with caching).
@@ -202,11 +209,10 @@ class CharacterDialog(QDialog):
         self.nickname_edit.setPlaceholderText("Nickname or preferred name")
         layout.addRow("Nickname:", self.nickname_edit)
         
-        # Physical description
-        self.physical_edit = QTextEdit()
-        self.physical_edit.setAcceptRichText(False)
-        self.physical_edit.setPlaceholderText("Physical appearance, distinguishing features...")
-        self.physical_edit.setMaximumHeight(100)
+        # Physical description with AI autocomplete
+        self.physical_edit = AutocompleteLineEdit(field_type="description", parent=self)
+        self.physical_edit.setPlaceholderText("Physical appearance, distinguishing features... (AI-assisted)")
+        self._autocomplete_manager.connect_field(self.physical_edit, {"genre": "Character Description"})
         layout.addRow("Physical Description:", self.physical_edit)
         
         # AI exclusion
@@ -515,6 +521,26 @@ class CharacterDialog(QDialog):
             text = combo.itemText(index)
             combo.setEditText(text)
     
+    def _randomize_all_fields(self) -> None:
+        """Randomize all fields with database-backed options on initial load."""
+        # Basic Info
+        self._randomize_combo(self.first_name_edit)
+        self._randomize_combo(self.last_name_edit)
+        
+        # Identity
+        self._randomize_combo(self.hometown_edit)
+        
+        # Life Details
+        self._randomize_occupation()
+        
+        # Psychology
+        self._randomize_combo(self.character_type_edit)
+        self._randomize_combo(self.motivation_edit)
+        self._randomize_combo(self.trait_edit)
+        self._randomize_combo(self.myers_briggs_edit)
+        self._randomize_combo(self.enneagram_edit)
+        self._randomize_combo(self.wounds_edit)
+    
     def _load_character_data(self) -> None:
         """Load existing character data into the form."""
         if not self.character:
@@ -604,8 +630,18 @@ class CharacterDialog(QDialog):
             else:
                 self.trait_edit.setCurrentText(psych_profile['trait'])
         
-        self.myers_briggs_edit.setText(self.character.myers_briggs or "")
-        self.enneagram_edit.setText(self.character.enneagram or "")
+        # Myers-Briggs and Enneagram (SearchableComboBox)
+        if self.character.myers_briggs:
+            if hasattr(self.myers_briggs_edit, 'setText'):
+                self.myers_briggs_edit.setText(self.character.myers_briggs)
+            else:
+                self.myers_briggs_edit.setCurrentText(self.character.myers_briggs)
+        
+        if self.character.enneagram:
+            if hasattr(self.enneagram_edit, 'setText'):
+                self.enneagram_edit.setText(self.character.enneagram)
+            else:
+                self.enneagram_edit.setCurrentText(self.character.enneagram)
         
         # Wounds - primary wound from wounds field, notes from meta
         if self.character.wounds:
@@ -623,7 +659,9 @@ class CharacterDialog(QDialog):
         def get_text(widget):
             if hasattr(widget, 'currentText'):
                 return widget.currentText() or None
-            return widget.text() or None
+            elif hasattr(widget, 'text'):
+                return widget.text() or None
+            return None
         
         # Collect data
         data = {
@@ -633,7 +671,7 @@ class CharacterDialog(QDialog):
             "middle_names": self.middle_names_edit.text() or None,
             "last_name": get_text(self.last_name_edit),
             "nickname": self.nickname_edit.text() or None,
-            "physical_description": self.physical_edit.toPlainText() or None,
+            "physical_description": get_text(self.physical_edit),
             "gender": self.gender_edit.text() or None,
             "sex": self.sex_edit.text() or None,
             "ethnicity": self.ethnicity_edit.text() or None,
@@ -645,8 +683,8 @@ class CharacterDialog(QDialog):
             "education": self.education_edit.text() or None,
             "marital_status": self.marital_status_edit.text() or None,
             "has_children": self.has_children_checkbox.isChecked() if self.has_children_checkbox.isChecked() else None,
-            "myers_briggs": self.myers_briggs_edit.text() or None,
-            "enneagram": self.enneagram_edit.text() or None,
+            "myers_briggs": get_text(self.myers_briggs_edit),
+            "enneagram": get_text(self.enneagram_edit),
             "wounds": get_text(self.wounds_edit),  # Primary wound
             "exclude_from_ai": self.exclude_ai_checkbox.isChecked(),
         }

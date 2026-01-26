@@ -103,6 +103,8 @@ class MainWindow(QMainWindow):
         tools_menu.addAction("&Locations...", self._on_manage_locations)
         tools_menu.addAction("&Events/Timeline...", self._on_manage_events)
         tools_menu.addSeparator()
+        tools_menu.addAction("🎨 ComfyUI &Workflows...", self._on_manage_workflows)
+        tools_menu.addSeparator()
         tools_menu.addAction("🤖 Configure AI &Team...", self._on_configure_llm_team)
         tools_menu.addSeparator()
         tools_menu.addAction("&Word Count Statistics...")
@@ -546,6 +548,13 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             # Location was created/updated, refresh the binder if needed
             self.statusBar().showMessage("Location saved", 3000)
+    
+    def _on_manage_workflows(self) -> None:
+        """Open ComfyUI workflow manager."""
+        from nico.presentation.widgets.workflow_manager import WorkflowManagerDialog
+        
+        dialog = WorkflowManagerDialog(parent=self)
+        dialog.exec()
     
     def _on_manage_events(self) -> None:
         """Open event/timeline management dialog."""
